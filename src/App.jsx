@@ -468,7 +468,8 @@ function CalendarioView({ pedidos, setSelectedPedido, setView, CATEGORIA_COLOR, 
 }
 
 
-function PedidosListos({ pedidos, saldo, isHoy, handleEstadoChange, handleDelete, setMsgModal, CATEGORIA_COLOR, CATEGORIA_ICON, inp, empresa, setView, clientes, setClienteDestacado }) {
+function PedidosListos({ pedidos, saldo, isHoy, handleEstadoChange, handleDelete, setMsgModal, CATEGORIA_COLOR, CATEGORIA_ICON, inp, empresa, setView, clientes, setClienteDestacado, showToast, onEntregarVarios }) {
+  const [seleccion, setSeleccion] = useState([]); // fireIds seleccionados
   const [busqL, setBusqL]         = useState("");
   const [busqH, setBusqH]         = useState("");
   const [tabActiva, setTabActiva] = useState("listos");
@@ -484,6 +485,16 @@ function PedidosListos({ pedidos, saldo, isHoy, handleEstadoChange, handleDelete
   });
 
   const totalCobrar = listos.reduce((s,p) => s + saldo(p), 0);
+
+  // Selección: solo cuenta los que siguen listos (se limpia sola al entregar)
+  const seleccionados   = listos.filter(p => seleccion.includes(p.fireId));
+  const totalSelec      = seleccionados.reduce((s,p) => s + saldo(p), 0);
+  const todosVisiblesSel = filtrados.length > 0 && filtrados.every(p => seleccion.includes(p.fireId));
+  const toggleSel = (id) => setSeleccion(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
+  const toggleTodos = () => setSeleccion(prev => todosVisiblesSel
+    ? prev.filter(id => !filtrados.some(p => p.fireId===id))
+    : [...new Set([...prev, ...filtrados.map(p=>p.fireId)])]);
+  const chk = { width:18, height:18, accentColor:"#e65100", cursor:"pointer" };
 
   const entregados = pedidos
     .filter(p => p.estado === "Entregado")
@@ -559,6 +570,26 @@ function PedidosListos({ pedidos, saldo, isHoy, handleEstadoChange, handleDelete
             </div>
           </div>
 
+          {seleccionados.length > 0 && (
+            <div style={{ position:"sticky", top:8, zIndex:20, background:"#1a2340", borderRadius:12, padding:"12px 18px", marginBottom:14,
+              display:"flex", alignItems:"center", gap:14, flexWrap:"wrap", boxShadow:"0 6px 20px rgba(26,35,64,.25)" }}>
+              <span style={{ color:"#fff", fontWeight:700, fontSize:14 }}>
+                {seleccionados.length} seleccionado{seleccionados.length!==1?"s":""}
+              </span>
+              <span style={{ color:"#ffcc80", fontSize:13 }}>Saldo a cobrar: <b>${totalSelec.toLocaleString("es-AR")}</b></span>
+              <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
+                <button onClick={()=>setSeleccion([])}
+                  style={{ background:"transparent", border:"1.5px solid rgba(255,255,255,.35)", color:"#fff", padding:"8px 14px", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer" }}>
+                  Limpiar
+                </button>
+                <button onClick={()=>onEntregarVarios && onEntregarVarios(seleccionados)}
+                  style={{ background:"#e65100", border:"none", color:"#fff", padding:"8px 18px", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer" }}>
+                  📦 Entregar seleccionados
+                </button>
+              </div>
+            </div>
+          )}
+
           {filtrados.length === 0 ? (
             <div style={{ background:"#fff", borderRadius:14, boxShadow:"0 2px 14px rgba(230,81,0,.07)", padding:"52px 24px", textAlign:"center" }}>
               <div style={{ fontSize:40, marginBottom:14 }}>🎉</div>
@@ -574,6 +605,9 @@ function PedidosListos({ pedidos, saldo, isHoy, handleEstadoChange, handleDelete
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>
                 <thead>
                   <tr style={{ background:"#fffaf7" }}>
+                    <th style={{ padding:"11px 6px 11px 16px", width:30, borderBottom:"1px solid #f5e8e0" }}>
+                      <input type="checkbox" checked={todosVisiblesSel} onChange={toggleTodos} title="Seleccionar todos" style={chk}/>
+                    </th>
                     {["Pedido","Categoría","Cliente","Fecha Entrega","Total","Saldo","Acciones"].map(h=>(
                       <th key={h} style={{ padding:"11px 16px", textAlign:"left", fontWeight:600, fontSize:11, color:"#8a7060", textTransform:"uppercase", letterSpacing:".6px", whiteSpace:"nowrap", borderBottom:"1px solid #f5e8e0" }}>{h}</th>
                     ))}
@@ -584,7 +618,11 @@ function PedidosListos({ pedidos, saldo, isHoy, handleEstadoChange, handleDelete
                     const cc = CATEGORIA_COLOR[p.categoria];
                     const hf = isHoy(p);
                     return (
-                      <tr key={p.fireId||p.id} style={{ borderBottom:"1px solid #fef0e8", background:hf?"#fffdf0":"#fff" }}>
+                      <tr key={p.fireId||p.id} style={{ borderBottom:"1px solid #fef0e8",
+                        background: seleccion.includes(p.fireId) ? "#fff3e0" : hf?"#fffdf0":"#fff" }}>
+                        <td style={{ padding:"13px 6px 13px 16px" }}>
+                          <input type="checkbox" checked={seleccion.includes(p.fireId)} onChange={()=>toggleSel(p.fireId)} style={chk}/>
+                        </td>
                         <td style={{ padding:"13px 16px" }}>
                           <div style={{ fontWeight:600, color:"#1a2340" }}>{p.nombre}</div>
                           {p.notas && <div style={{ fontSize:11, color:"#a09080", marginTop:2, maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.notas}</div>}
@@ -3576,7 +3614,7 @@ function buildComprobanteHTML(venta, empresa) {
     <div class="comp-num">${num}</div>
     <div class="comp-tipo">Comprobante</div>
     <div class="badge-x">NO VÁLIDO COMO FACTURA</div>
-    <div style="font-size:11px;color:#a09080;margin-top:4px">${fecha} · ${hora}</div>
+    <div style="font-size:11px;color:#a09080;margin-top:4px">${fecha}${hora?` · ${hora}`:""}</div>
   </div>
 </div>
 <div class="info-grid">
@@ -3600,11 +3638,12 @@ function buildComprobanteHTML(venta, empresa) {
 
 function buildPresupuestoHTML(datos, empresa) {
   const num   = `P-${String(datos.numero||1).padStart(5,"0")}`;
-  const now   = new Date();
-  const fecha = now.toLocaleDateString("es-AR");
-  const hora  = now.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
+  const base  = datos.fecha ? new Date(datos.fecha+"T12:00:00") : new Date();
+  const fecha = base.toLocaleDateString("es-AR");
+  const hora  = datos.fecha ? "" : new Date().toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
   const nombre = empresa?.nombre || "Mafalda Gráfica";
-  const validez = new Date(now.getTime() + 7*24*60*60*1000).toLocaleDateString("es-AR");
+  const diasValidez = parseInt(datos.validezDias)||7;
+  const validez = new Date(base.getTime() + diasValidez*24*60*60*1000).toLocaleDateString("es-AR");
   const rows = datos.items.map(it => `
     <tr>
       <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0">${it.cantidad}</td>
@@ -3653,12 +3692,14 @@ function buildPresupuestoHTML(datos, empresa) {
     <div class="pres-num">${num}</div>
     <div style="font-size:11px;color:#a09080;margin-top:3px">Presupuesto</div>
     <div class="pres-badge">📋 PRESUPUESTO</div>
-    <div style="font-size:11px;color:#a09080;margin-top:4px">${fecha} · ${hora}</div>
+    <div style="font-size:11px;color:#a09080;margin-top:4px">${fecha}${hora?` · ${hora}`:""}</div>
   </div>
 </div>
 <div class="info-grid">
   <div class="ibox"><div class="ilbl">Cliente</div><div class="ival">${datos.clienteNombre||"Consumidor Final"}</div></div>
   <div class="ibox"><div class="ilbl">Válido hasta</div><div class="ival">${validez}</div></div>
+  ${datos.tiempoEntrega?`<div class="ibox"><div class="ilbl">Tiempo de entrega aprox.</div><div class="ival">${datos.tiempoEntrega}</div></div>`:""}
+  ${datos.metodoPago?`<div class="ibox"><div class="ilbl">Forma de pago</div><div class="ival">${datos.metodoPago}</div></div>`:""}
 </div>
 <table>
   <thead><tr><th>Cant.</th><th>Detalle</th><th style="text-align:right">P.Unit.</th><th style="text-align:right">Subtotal</th></tr></thead>
@@ -3668,7 +3709,8 @@ function buildPresupuestoHTML(datos, empresa) {
   <div class="total-lbl">Total presupuestado</div>
   <div class="total-val">$${parseFloat(datos.total).toLocaleString("es-AR")}</div>
 </div>
-<div class="validez">⏳ Este presupuesto tiene validez de 7 días · Sujeto a cambios de precio</div>
+${datos.observaciones?`<div style="font-size:12px;color:#4a5568;margin-bottom:12px;padding:10px 12px;border:1px dashed #d0d0d0;border-radius:6px"><b>Observaciones:</b> ${datos.observaciones}</div>`:""}
+<div class="validez">⏳ Este presupuesto tiene validez de ${diasValidez} día${diasValidez!==1?"s":""} · Sujeto a cambios de precio</div>
 <div class="foot"><span>${nombre}</span><span>${num} · ${fecha}</span></div>
 <script>window.onload=()=>window.print();</script>
 </body></html>`;
@@ -5084,17 +5126,18 @@ function NuevaVentaView({ setView, showToast, clientes, empresa, configCargada }
     if (items.length===0) { showToast("Agregá al menos un producto", "error"); return; }
     setSaving(true);
     try {
-      const snap = await getDocs(collection(db, "presupuestos"));
-      const numero = snap.size + 1;
+      const numero = await getNextNroPresupuesto();
       const pres = {
         numero,
         fecha:         new Date().toISOString().split("T")[0],
         clienteId:     clienteSelId||null,
         clienteNombre: clienteNombre||"Consumidor Final",
+        metodoPago,
+        validezDias:   7,
         items,
         total,
         creadoEn:      new Date().toISOString(),
-        estado:        "pendiente",
+        estado:        "emitido",
       };
       await addDoc(collection(db, "presupuestos"), pres);
       // Si hay cliente, guardar en historial del cliente
@@ -5366,6 +5409,541 @@ function NuevaVentaView({ setView, showToast, clientes, empresa, configCargada }
               onClose={()=>setModalAgendarVenta(false)}
             />
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Contador correlativo de presupuestos ─────────────────────────────────
+async function getNextNroPresupuesto() {
+  const ref  = doc(db, "config", "contadores");
+  const snap = await getDoc(ref);
+  let actual = snap.exists() ? snap.data().nroPresupuesto : undefined;
+  if (actual === undefined) {
+    // Primera vez: arrancar desde el número más alto ya usado
+    const pres = await getDocs(collection(db, "presupuestos"));
+    actual = Math.max(0, ...pres.docs.map(d => parseInt(d.data().numero)||0));
+  }
+  const siguiente = actual + 1;
+  await setDoc(ref, { nroPresupuesto: siguiente }, { merge: true });
+  return siguiente;
+}
+
+const presNum = (p) => `P-${String(p.numero||0).padStart(5,"0")}`;
+const presVence = (p) => {
+  if (!p.fecha) return null;
+  const d = new Date(p.fecha+"T12:00:00");
+  d.setDate(d.getDate() + (parseInt(p.validezDias)||7));
+  return d.toISOString().split("T")[0];
+};
+
+// ── Componente: Presupuestos ─────────────────────────────────────────────
+function PresupuestosView({ showToast, clientes, empresa, setView, setSelectedPedido }) {
+  const [tab, setTab]                 = useState("emitidos"); // nuevo | emitidos | aprobados
+  const [presupuestos, setPresupuestos] = useState([]);
+  const [editando, setEditando]       = useState(null);   // presupuesto en edición
+  const [aprobando, setAprobando]     = useState(null);   // presupuesto a aprobar
+  const [busq, setBusq]               = useState("");
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "presupuestos"), snap => {
+      setPresupuestos(snap.docs.map(d => ({ ...d.data(), fireId:d.id }))
+        .sort((a,b) => (b.numero||0) - (a.numero||0)));
+    });
+    return () => unsub();
+  }, []);
+
+  const esAprobado = p => p.estado === "aprobado" || p.estado === "convertido";
+  const emitidos   = presupuestos.filter(p => !esAprobado(p));
+  const aprobados  = presupuestos.filter(esAprobado);
+  const hoy        = new Date().toISOString().split("T")[0];
+
+  const filtrar = lista => lista.filter(p => {
+    if (!busq) return true;
+    const q = busq.toLowerCase();
+    return `${presNum(p)} ${p.clienteNombre||""} ${(p.items||[]).map(i=>i.nombre).join(" ")}`.toLowerCase().includes(q);
+  });
+
+  const eliminar = async (p) => {
+    if (!window.confirm(`¿Eliminar el presupuesto ${presNum(p)}?`)) return;
+    await deleteDoc(doc(db, "presupuestos", p.fireId));
+    showToast("Presupuesto eliminado", "error");
+  };
+
+  const abrirNuevo  = () => { setEditando(null); setTab("nuevo"); };
+  const abrirEditar = (p) => { setEditando(p); setTab("nuevo"); };
+
+  const tabBtn = (id, label, count) => (
+    <button onClick={() => id==="nuevo" ? abrirNuevo() : setTab(id)}
+      style={{ padding:"10px 20px", borderRadius:20, fontSize:14, fontWeight:700, cursor:"pointer", border:"none",
+        fontFamily:"'DM Sans',sans-serif", display:"flex", alignItems:"center", gap:8,
+        background: tab===id ? (id==="nuevo"?"#e65100":"#1a2340") : "#fff",
+        color: tab===id ? "#fff" : (id==="nuevo"?"#e65100":"#4a5568"),
+        boxShadow: tab===id ? "0 3px 10px rgba(26,35,64,.2)" : "0 1px 6px rgba(0,0,0,.06)" }}>
+      {label}
+      {count!==undefined && <span style={{ background: tab===id?"rgba(255,255,255,.25)":"#f0d5c0", borderRadius:10, padding:"1px 8px", fontSize:12 }}>{count}</span>}
+    </button>
+  );
+
+  const Tabla = ({ lista, aprobada }) => (
+    <div style={{ background:"#fff", borderRadius:14, boxShadow:"0 2px 14px rgba(230,81,0,.07)", overflow:"hidden" }}>
+      {lista.length===0 ? (
+        <div style={{ padding:48, textAlign:"center", color:"#a09080", fontSize:14 }}>
+          {aprobada ? "Todavía no hay presupuestos aprobados" : "No hay presupuestos emitidos"}
+        </div>
+      ) : (
+        <div style={{ overflowX:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+          <thead><tr style={{ background:"#fff8f5" }}>
+            {["N°","Fecha","Cliente","Detalle","Total", aprobada?"Entrega":"Validez",""].map(h=>(
+              <th key={h} style={{ padding:"11px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#a09080", textTransform:"uppercase", letterSpacing:".5px", borderBottom:"1px solid #f0d5c0", whiteSpace:"nowrap" }}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>
+            {lista.map(p => {
+              const vence   = presVence(p);
+              const vencido = !aprobada && vence && vence < hoy;
+              const detalle = (p.items||[]).map(i=>`${i.cantidad}× ${i.nombre}`).join(", ");
+              return (
+                <tr key={p.fireId} style={{ borderBottom:"1px solid #fef0e8" }}>
+                  <td style={{ padding:"11px 14px", fontFamily:"monospace", fontWeight:700, color:"#1a2340", whiteSpace:"nowrap" }}>{presNum(p)}</td>
+                  <td style={{ padding:"11px 14px", color:"#4a5568", whiteSpace:"nowrap" }}>{fmtFecha(p.fecha)}</td>
+                  <td style={{ padding:"11px 14px", fontWeight:600, color:"#1a2340" }}>{p.clienteNombre||"Consumidor Final"}</td>
+                  <td style={{ padding:"11px 14px", color:"#4a5568", maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={detalle}>{detalle||"—"}</td>
+                  <td style={{ padding:"11px 14px", fontWeight:800, color:"#e65100", whiteSpace:"nowrap" }}>${parseFloat(p.total||0).toLocaleString("es-AR")}</td>
+                  <td style={{ padding:"11px 14px", whiteSpace:"nowrap" }}>
+                    {aprobada
+                      ? (p.estado==="convertido"
+                          ? <span style={{ fontSize:12, color:"#2e7d32", fontWeight:700 }}>💰 Vendido</span>
+                          : <span style={{ fontWeight:600, color:"#1a2340" }}>{fmtFecha(p.fechaEntrega)}</span>)
+                      : <span style={{ fontWeight:600, color:vencido?"#c62828":"#4a5568" }}>{vencido?"⚠️ Vencido ":""}{fmtFecha(vence)}</span>}
+                  </td>
+                  <td style={{ padding:"8px 12px" }}>
+                    <div style={{ display:"flex", gap:6, justifyContent:"flex-end" }}>
+                      <button title="Imprimir" onClick={()=>imprimirPresupuesto(p, empresa)}
+                        style={{ background:"#e65100", border:"none", color:"#fff", padding:"6px 10px", borderRadius:7, cursor:"pointer", fontSize:13 }}>🖨️</button>
+                      {!aprobada && <>
+                        <button title="Editar" onClick={()=>abrirEditar(p)}
+                          style={{ background:"#fff", border:"1.5px solid #e65100", color:"#e65100", padding:"5px 10px", borderRadius:7, cursor:"pointer", fontSize:13 }}>✏️</button>
+                        <button title="Aprobar" onClick={()=>setAprobando(p)}
+                          style={{ background:"#2e7d32", border:"none", color:"#fff", padding:"6px 12px", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:700, whiteSpace:"nowrap" }}>✅ Aprobar</button>
+                        <button title="Eliminar" onClick={()=>eliminar(p)}
+                          style={{ background:"#ffebee", border:"none", color:"#c62828", padding:"6px 10px", borderRadius:7, cursor:"pointer", fontSize:13 }}>🗑</button>
+                      </>}
+                      {aprobada && p.pedidoFireId && setSelectedPedido && (
+                        <button onClick={()=>{ setSelectedPedido({ fireId:p.pedidoFireId }); setView("detalle"); }}
+                          style={{ background:"#1a2340", border:"none", color:"#fff", padding:"6px 12px", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:700, whiteSpace:"nowrap" }}>Ver pedido →</button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{ display:"flex", gap:8, marginBottom:20, flexWrap:"wrap" }}>
+        {tabBtn("nuevo", editando ? "✏️ Editando presupuesto" : "➕ Nuevo Presupuesto")}
+        {tabBtn("emitidos", "📋 Emitidos", emitidos.length)}
+        {tabBtn("aprobados", "✅ Aprobados", aprobados.length)}
+      </div>
+
+      {tab!=="nuevo" && (
+        <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="🔍 Buscar por número, cliente o producto..."
+          style={{ width:"100%", padding:"11px 16px", borderRadius:10, border:"1.5px solid #f0d5c0", fontSize:14, fontFamily:"'DM Sans',sans-serif", outline:"none", boxSizing:"border-box", marginBottom:16 }}/>
+      )}
+
+      {tab==="nuevo" && (
+        <PresupuestoEditor key={editando?.fireId||"nuevo"} presupuesto={editando} clientes={clientes} empresa={empresa} showToast={showToast}
+          onSaved={() => { setEditando(null); setTab("emitidos"); }}
+          onCancel={() => { setEditando(null); setTab("emitidos"); }}/>
+      )}
+      {tab==="emitidos"  && <Tabla lista={filtrar(emitidos)} aprobada={false}/>}
+      {tab==="aprobados" && <Tabla lista={filtrar(aprobados)} aprobada={true}/>}
+
+      {aprobando && (
+        <ModalAprobarPresupuesto pres={aprobando} clientes={clientes} showToast={showToast}
+          onClose={()=>setAprobando(null)}
+          onDone={()=>{ setAprobando(null); setTab("aprobados"); }}/>
+      )}
+    </div>
+  );
+}
+
+// ── Editor de presupuesto (nuevo / editar) ───────────────────────────────
+function PresupuestoEditor({ presupuesto, clientes, empresa, showToast, onSaved, onCancel }) {
+  const editMode = !!presupuesto;
+  const hoy = new Date().toISOString().split("T")[0];
+  const [insumos, setInsumos]           = useState([]);
+  const [items, setItems]               = useState(presupuesto?.items || []);
+  const [busqProd, setBusqProd]         = useState("");
+  const [tipoPrecios, setTipoPrecios]   = useState("venta");
+  const [clienteSearch, setClienteSearch] = useState("");
+  const [clienteDropdown, setClienteDropdown] = useState(false);
+  const [clienteSelId, setClienteSelId] = useState(presupuesto?.clienteId || null);
+  const [clienteNombre, setClienteNombre] = useState(presupuesto?.clienteNombre && presupuesto.clienteNombre!=="Consumidor Final" ? presupuesto.clienteNombre : "");
+  const [metodoPago, setMetodoPago]     = useState(presupuesto?.metodoPago || "Efectivo");
+  const [validezDias, setValidezDias]   = useState(presupuesto?.validezDias || 7);
+  const [tiempoEntrega, setTiempoEntrega] = useState(presupuesto?.tiempoEntrega || "");
+  const [observaciones, setObservaciones] = useState(presupuesto?.observaciones || "");
+  const [itemLibreNombre, setItemLibreNombre] = useState("");
+  const [itemLibrePrecio, setItemLibrePrecio] = useState("");
+  const [saving, setSaving]             = useState(false);
+  const fecha = presupuesto?.fecha || hoy;
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "insumos"), snap =>
+      setInsumos(snap.docs.map(d => ({ ...d.data(), fireId:d.id }))));
+    return () => unsub();
+  }, []);
+
+  const prodFiltrados = useMemo(() => insumos.filter(i => {
+    if (!busqProd) return true;
+    const texto = `${i.nombre||""} ${i.codigo||""} ${i.categoria||""}`.toLowerCase();
+    return busqProd.toLowerCase().split(/\s+/).filter(Boolean).every(p => texto.includes(p));
+  }).sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"")).slice(0,80), [insumos, busqProd]);
+
+  const precioDe = ins => tipoPrecios==="gremio"
+    ? (parseFloat(ins.precioGremio)||parseFloat(ins.precioVenta)||0)
+    : (parseFloat(ins.precioVenta)||0);
+
+  const agregarItem = (ins) => setItems(prev => {
+    const existe = prev.find(it => it.insumoId===ins.fireId);
+    if (existe) return prev.map(it => it.insumoId===ins.fireId ? { ...it, cantidad:it.cantidad+1 } : it);
+    return [...prev, { insumoId:ins.fireId, codigo:ins.codigo||"", nombre:ins.nombre, precio:precioDe(ins), cantidad:1 }];
+  });
+  const agregarItemLibre = () => {
+    if (!itemLibreNombre.trim()) { showToast("Ingresá un nombre para el ítem","error"); return; }
+    setItems(prev => [...prev, { insumoId:`libre_${Date.now()}`, codigo:"CUSTOM", nombre:itemLibreNombre.trim(), precio:parseFloat(itemLibrePrecio)||0, cantidad:1, esLibre:true }]);
+    setItemLibreNombre(""); setItemLibrePrecio("");
+  };
+  const upd = (id, campo, val) => setItems(prev => prev.map(it => it.insumoId===id ? { ...it, [campo]:val } : it));
+  const total = items.reduce((s,it) => s + it.cantidad*it.precio, 0);
+
+  const guardar = async (imprimir) => {
+    if (items.length===0) { showToast("Agregá al menos un producto","error"); return; }
+    setSaving(true);
+    try {
+      const datos = {
+        fecha,
+        clienteId:     clienteSelId || null,
+        clienteNombre: clienteNombre.trim() || "Consumidor Final",
+        metodoPago, validezDias: parseInt(validezDias)||7,
+        tiempoEntrega: tiempoEntrega.trim(),
+        observaciones: observaciones.trim(),
+        items, total,
+      };
+      let final;
+      if (editMode) {
+        await updateDoc(doc(db, "presupuestos", presupuesto.fireId), { ...datos, editadoEn:new Date().toISOString() });
+        final = { ...presupuesto, ...datos };
+        showToast(`Presupuesto ${presNum(final)} actualizado ✅`);
+      } else {
+        const numero = await getNextNroPresupuesto();
+        final = { ...datos, numero, estado:"emitido", creadoEn:new Date().toISOString() };
+        await addDoc(collection(db, "presupuestos"), final);
+        showToast(`Presupuesto ${presNum(final)} guardado ✅`);
+      }
+      if (imprimir) setTimeout(() => imprimirPresupuesto(final, empresa), 300);
+      onSaved();
+    } catch(e) {
+      console.error(e);
+      showToast("Error al guardar el presupuesto","error");
+    }
+    setSaving(false);
+  };
+
+  const card = { background:"#fff", borderRadius:14, boxShadow:"0 2px 14px rgba(230,81,0,.07)", padding:"18px 20px" };
+  const inp  = { width:"100%", padding:"10px 12px", borderRadius:8, border:"1.5px solid #f0d5c0", fontSize:13, fontFamily:"'DM Sans',sans-serif", outline:"none", boxSizing:"border-box" };
+  const lbl  = { display:"block", fontSize:12, fontWeight:600, color:"#4a5568", marginBottom:5 };
+
+  return (
+    <div className="grid-nueva-venta">
+      {/* ── Izquierda: productos ── */}
+      <div style={{ ...card, padding:20 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+          <div style={{ fontWeight:700, fontSize:15, color:"#1a2340" }}>🔍 Productos</div>
+          <div style={{ display:"flex", gap:6 }}>
+            {[["venta","Precio Venta"],["gremio","Precio Gremio"]].map(([v,l]) => (
+              <button key={v} onClick={()=>setTipoPrecios(v)}
+                style={{ padding:"5px 12px", borderRadius:20, fontSize:12, fontWeight:600, cursor:"pointer", border:"none",
+                  background:tipoPrecios===v?"#e65100":"#fff8f5", color:tipoPrecios===v?"#fff":"#a09080" }}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <input placeholder="Buscar por nombre o código..." value={busqProd} onChange={e=>setBusqProd(e.target.value)} style={{ ...inp, fontSize:14, marginBottom:12 }}/>
+        <div style={{ maxHeight:420, overflowY:"auto", display:"flex", flexDirection:"column", gap:6 }}>
+          {prodFiltrados.length===0
+            ? <div style={{ textAlign:"center", padding:"24px 0", color:"#a09080", fontSize:13 }}>Sin productos</div>
+            : prodFiltrados.map(ins => {
+                const enCarrito = items.find(it => it.insumoId===ins.fireId);
+                return (
+                  <div key={ins.fireId} onClick={()=>agregarItem(ins)}
+                    style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", borderRadius:9, cursor:"pointer",
+                      border:`1.5px solid ${enCarrito?"#e65100":"#f0d5c0"}`, background:enCarrito?"#fff8f5":"#fff" }}>
+                    <div>
+                      <div style={{ fontWeight:600, fontSize:13, color:"#1a2340" }}>{ins.nombre}</div>
+                      <div style={{ fontSize:11, color:"#a09080", marginTop:2 }}>{ins.codigo||""} {ins.categoria?`· ${ins.categoria}`:""}</div>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                      <span style={{ fontWeight:700, color:"#e65100", fontSize:14 }}>${precioDe(ins).toLocaleString("es-AR")}</span>
+                      {enCarrito
+                        ? <span style={{ background:"#e65100", color:"#fff", borderRadius:"50%", width:22, height:22, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700 }}>{enCarrito.cantidad}</span>
+                        : <span style={{ color:"#e65100", fontSize:18, fontWeight:300 }}>+</span>}
+                    </div>
+                  </div>
+                );
+              })}
+        </div>
+        <div style={{ marginTop:14, borderTop:"1.5px dashed #f0d5c0", paddingTop:14 }}>
+          <div style={{ fontSize:12, fontWeight:700, color:"#a09080", textTransform:"uppercase", letterSpacing:".6px", marginBottom:10 }}>✏️ Ítem personalizado</div>
+          <div style={{ display:"flex", gap:8 }}>
+            <input value={itemLibreNombre} onChange={e=>setItemLibreNombre(e.target.value)} placeholder="Nombre del ítem..."
+              onKeyDown={e=>{ if(e.key==="Enter") agregarItemLibre(); }} style={{ ...inp, flex:2 }}/>
+            <input type="number" value={itemLibrePrecio} onChange={e=>setItemLibrePrecio(e.target.value)} placeholder="Precio"
+              onKeyDown={e=>{ if(e.key==="Enter") agregarItemLibre(); }} style={{ ...inp, flex:1 }}/>
+            <button onClick={agregarItemLibre}
+              style={{ padding:"9px 16px", background:"#1a2340", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>+ Agregar</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Derecha: datos + carrito ── */}
+      <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        {editMode && (
+          <div style={{ background:"#1a2340", color:"#fff", borderRadius:10, padding:"10px 16px", fontSize:13, fontWeight:700 }}>
+            ✏️ Editando {presNum(presupuesto)}
+          </div>
+        )}
+
+        {/* Cliente */}
+        <div style={card}>
+          <div style={{ fontWeight:700, fontSize:14, color:"#1a2340", marginBottom:12 }}>👤 Cliente</div>
+          {clienteSelId ? (
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"#fff8f5", borderRadius:8, padding:"10px 14px", border:"1.5px solid #e65100" }}>
+              <div style={{ fontWeight:600, fontSize:13 }}>{clienteNombre}</div>
+              <button onClick={()=>{ setClienteSelId(null); setClienteNombre(""); setClienteSearch(""); }}
+                style={{ background:"transparent", border:"none", color:"#c62828", cursor:"pointer", fontSize:16, fontWeight:700 }}>✕</button>
+            </div>
+          ) : (
+            <div style={{ position:"relative" }}>
+              <input value={clienteSearch || clienteNombre}
+                onChange={e=>{ setClienteSearch(e.target.value); setClienteNombre(e.target.value); setClienteDropdown(true); }}
+                onFocus={()=>setClienteDropdown(true)} placeholder="Buscar cliente o escribir un nombre" style={inp}/>
+              {clienteDropdown && clienteSearch && (
+                <div style={{ position:"absolute", top:"100%", left:0, right:0, background:"#fff", border:"1.5px solid #f0d5c0", borderRadius:8, boxShadow:"0 8px 24px rgba(230,81,0,.1)", zIndex:100, maxHeight:180, overflowY:"auto", marginTop:4 }}>
+                  {clientes.filter(c => `${c.nombre} ${c.apellido} ${c.empresa||""} ${c.telefono||""}`.toLowerCase().includes(clienteSearch.toLowerCase())).slice(0,8).map(cl => (
+                    <div key={cl.fireId} onClick={()=>{ setClienteSelId(cl.fireId); setClienteNombre(`${cl.nombre} ${cl.apellido||""}`.trim()); setClienteSearch(""); setClienteDropdown(false); }}
+                      style={{ padding:"9px 14px", cursor:"pointer", fontSize:13, fontWeight:600, borderBottom:"1px solid #fef0e8" }}
+                      onMouseOver={e=>e.currentTarget.style.background="#fff8f5"} onMouseOut={e=>e.currentTarget.style.background="#fff"}>
+                      {cl.nombre} {cl.apellido} {cl.empresa && `— ${cl.empresa}`}
+                      {cl.telefono && <span style={{ marginLeft:6, fontSize:11, color:"#a09080", fontWeight:400 }}>{cl.telefono}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Condiciones */}
+        <div style={card}>
+          <div style={{ fontWeight:700, fontSize:14, color:"#1a2340", marginBottom:12 }}>📄 Condiciones</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+            <div>
+              <label style={lbl}>Fecha</label>
+              <div style={{ ...inp, background:"#f8f9fa", color:"#4a5568" }}>{fmtFecha(fecha)}</div>
+            </div>
+            <div>
+              <label style={lbl}>Validez (días)</label>
+              <input type="number" min="1" value={validezDias} onChange={e=>setValidezDias(e.target.value)} style={inp}/>
+            </div>
+          </div>
+          <div style={{ marginBottom:12 }}>
+            <label style={lbl}>Tiempo de entrega aproximado</label>
+            <input value={tiempoEntrega} onChange={e=>setTiempoEntrega(e.target.value)} placeholder="Ej: 5 días hábiles" style={inp}/>
+          </div>
+          <label style={lbl}>Forma de pago</label>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+            {[["Efectivo","💵 Efectivo"],["Transferencia","📲 Transferencia"],["Tarjeta de Crédito","💳 Tarjeta"],["Cuenta Corriente","📒 Cta. Corriente"]].map(([m,l]) => (
+              <button key={m} onClick={()=>setMetodoPago(m)}
+                style={{ padding:"9px 8px", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", border:`2px solid ${metodoPago===m?"#e65100":"#f0d5c0"}`,
+                  background:metodoPago===m?"#e65100":"#fff", color:metodoPago===m?"#fff":"#4a5568" }}>{l}</button>
+            ))}
+          </div>
+          <label style={lbl}>Observaciones (opcional)</label>
+          <input value={observaciones} onChange={e=>setObservaciones(e.target.value)} placeholder="Aparece impreso en el presupuesto" style={inp}/>
+        </div>
+
+        {/* Ítems */}
+        <div style={card}>
+          <div style={{ fontWeight:700, fontSize:14, color:"#1a2340", marginBottom:12 }}>🧾 Ítems ({items.length})</div>
+          {items.length===0 ? (
+            <div style={{ textAlign:"center", padding:"20px 0", color:"#d4bfb0", fontSize:13 }}>Hacé clic en un producto para agregarlo</div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:14 }}>
+              {items.map(it => (
+                <div key={it.insumoId} style={{ padding:"8px 10px", borderRadius:8, background:it.esLibre?"#f0f3f9":"#fffaf7", border:`1px solid ${it.esLibre?"#c5cce0":"#f5e8e0"}` }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+                    <input value={it.nombre} onChange={e=>upd(it.insumoId,"nombre",e.target.value)}
+                      style={{ flex:1, fontSize:12, fontWeight:600, color:"#1a2340", border:"1px solid transparent", borderRadius:5, padding:"3px 6px", fontFamily:"'DM Sans',sans-serif", outline:"none", background:"transparent" }}
+                      onFocus={e=>e.target.style.borderColor="#f0d5c0"} onBlur={e=>e.target.style.borderColor="transparent"}/>
+                    <button onClick={()=>setItems(prev=>prev.filter(x=>x.insumoId!==it.insumoId))}
+                      style={{ background:"transparent", border:"none", color:"#c62828", cursor:"pointer", fontSize:14, fontWeight:700 }}>✕</button>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                      <button onClick={()=>upd(it.insumoId,"cantidad",Math.max(1,it.cantidad-1))} style={{ background:"#ffebee", border:"none", color:"#c62828", width:22, height:22, borderRadius:5, fontWeight:700, cursor:"pointer" }}>−</button>
+                      <input type="number" value={it.cantidad} onChange={e=>upd(it.insumoId,"cantidad",Math.max(1,parseInt(e.target.value)||1))}
+                        style={{ width:38, textAlign:"center", border:"1.5px solid #f0d5c0", borderRadius:5, fontSize:12, fontWeight:700, padding:"2px 3px" }}/>
+                      <button onClick={()=>upd(it.insumoId,"cantidad",it.cantidad+1)} style={{ background:"#e8f5e9", border:"none", color:"#2e7d32", width:22, height:22, borderRadius:5, fontWeight:700, cursor:"pointer" }}>+</button>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:4, flex:1 }}>
+                      <span style={{ fontSize:11, color:"#a09080", whiteSpace:"nowrap" }}>$ p/u</span>
+                      <input type="number" value={it.precio} onChange={e=>upd(it.insumoId,"precio",Math.max(0,parseFloat(e.target.value)||0))}
+                        style={{ width:"100%", textAlign:"right", border:"1.5px solid #e65100", borderRadius:5, fontSize:12, fontWeight:700, padding:"3px 6px", color:"#e65100", background:"#fff8f5", outline:"none" }}/>
+                    </div>
+                    <div style={{ fontSize:13, fontWeight:800, color:"#e65100", minWidth:65, textAlign:"right" }}>${(it.cantidad*it.precio).toLocaleString("es-AR")}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ borderTop:"2px solid #f5e8e0", paddingTop:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <span style={{ fontWeight:700, fontSize:15, color:"#1a2340" }}>TOTAL</span>
+            <span style={{ fontSize:26, fontWeight:700, color:"#e65100" }}>${total.toLocaleString("es-AR")}</span>
+          </div>
+        </div>
+
+        {/* Botones */}
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          <button onClick={()=>guardar(true)} disabled={saving||items.length===0}
+            style={{ width:"100%", padding:"15px", background:items.length===0?"#f0d5c0":"#e65100", color:"#fff", border:"none", borderRadius:10, fontSize:15, fontWeight:700, cursor:items.length===0?"not-allowed":"pointer" }}>
+            {saving ? "Guardando..." : editMode ? "💾 Guardar cambios · Imprimir" : "💾 Guardar · Imprimir presupuesto"}
+          </button>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={()=>guardar(false)} disabled={saving||items.length===0}
+              style={{ flex:2, padding:"12px", background:"#fff", color:"#1a2340", border:"2px solid #1a2340", borderRadius:10, fontSize:13, fontWeight:700, cursor:items.length===0?"not-allowed":"pointer", opacity:items.length===0?.5:1 }}>
+              Guardar sin imprimir
+            </button>
+            <button onClick={onCancel}
+              style={{ flex:1, padding:"12px", background:"transparent", color:"#a09080", border:"1.5px solid #f0d5c0", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer" }}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal: Aprobar presupuesto → crea pedido ─────────────────────────────
+function ModalAprobarPresupuesto({ pres, clientes, showToast, onClose, onDone }) {
+  const cliente = clientes.find(c => c.fireId===pres.clienteId);
+  const nombreDefault = (pres.items||[]).length===1
+    ? pres.items[0].nombre
+    : `${(pres.items||[])[0]?.nombre || "Pedido"} (+${(pres.items||[]).length-1})`;
+  const [nombre, setNombre]       = useState(nombreDefault);
+  const [categoria, setCategoria] = useState("");
+  const [fechaEntrega, setFechaEntrega] = useState("");
+  const [telefono, setTelefono]   = useState(cliente?.telefono || "");
+  const [seña, setSeña]           = useState("");
+  const [saving, setSaving]       = useState(false);
+
+  const confirmar = async () => {
+    if (!categoria)    { showToast("Elegí una categoría","error"); return; }
+    if (!fechaEntrega) { showToast("Elegí la fecha de entrega","error"); return; }
+    setSaving(true);
+    try {
+      const nroOT = await getNextNroOT();
+      const notas = (pres.items||[]).map(it => `${it.cantidad}× ${it.nombre} — $${(it.cantidad*it.precio).toLocaleString("es-AR")}`).join("\n");
+      const pedido = {
+        nombre:        nombre.trim() || nombreDefault,
+        cliente:       pres.clienteNombre || "Consumidor Final",
+        clienteId:     pres.clienteId || null,
+        telefono:      telefono.trim(),
+        categoria,
+        estado:        "Pendiente",
+        precio:        String(pres.total||0),
+        seña:          seña || "",
+        fechaPedido:   new Date().toISOString().split("T")[0],
+        fechaEntrega,
+        notas,
+        itemsVenta:    pres.items || [],
+        tomadoPor:     "",
+        presupuestoId: pres.fireId,
+        presupuestoNumero: pres.numero || null,
+        ...(nroOT ? { nroOT } : {}),
+      };
+      const ref = await addDoc(collection(db, "pedidos"), pedido);
+      await updateDoc(doc(db, "presupuestos", pres.fireId), {
+        estado:"aprobado", aprobadoEn:new Date().toISOString(),
+        pedidoFireId:ref.id, fechaEntrega, categoria,
+      });
+      showToast(`✅ ${presNum(pres)} aprobado · pedido creado`);
+      onDone();
+    } catch(e) {
+      console.error(e);
+      showToast("Error al aprobar el presupuesto","error");
+    }
+    setSaving(false);
+  };
+
+  const inp = { width:"100%", padding:"10px 12px", borderRadius:8, border:"1.5px solid #f0d5c0", fontSize:14, fontFamily:"'DM Sans',sans-serif", outline:"none", boxSizing:"border-box" };
+  const lbl = { display:"block", fontSize:12, fontWeight:600, color:"#4a5568", marginBottom:5 };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:400, padding:16 }} onClick={onClose}>
+      <div style={{ background:"#fff", borderRadius:16, padding:"26px 30px", width:480, maxHeight:"90vh", overflowY:"auto", boxShadow:"0 24px 80px rgba(0,0,0,.25)" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ fontWeight:700, fontSize:18, color:"#1a2340", marginBottom:4 }}>✅ Aprobar {presNum(pres)}</div>
+        <div style={{ fontSize:13, color:"#a09080", marginBottom:20 }}>
+          {pres.clienteNombre||"Consumidor Final"} · ${parseFloat(pres.total||0).toLocaleString("es-AR")} · se crea el pedido y aparece en el Calendario
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:13 }}>
+          <div>
+            <label style={lbl}>Nombre del pedido</label>
+            <input value={nombre} onChange={e=>setNombre(e.target.value)} style={{ ...inp, fontWeight:600, borderColor:"#e65100" }}/>
+          </div>
+          <div>
+            <label style={lbl}>Categoría *</label>
+            <select value={categoria} onChange={e=>setCategoria(e.target.value)} style={{ ...inp, cursor:"pointer" }}>
+              <option value="">— Elegí una categoría —</option>
+              {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <div>
+              <label style={lbl}>Fecha de entrega *</label>
+              <input type="date" value={fechaEntrega} onChange={e=>setFechaEntrega(e.target.value)} style={inp}/>
+            </div>
+            <div>
+              <label style={lbl}>Seña ($)</label>
+              <input type="number" value={seña} onChange={e=>setSeña(e.target.value)} placeholder="0" style={inp}/>
+            </div>
+          </div>
+          <div>
+            <label style={lbl}>Teléfono</label>
+            <input value={telefono} onChange={e=>setTelefono(e.target.value)} placeholder="Se muestra en el Calendario" style={inp}/>
+          </div>
+          {pres.tiempoEntrega && (
+            <div style={{ fontSize:12, color:"#a09080", background:"#fff8f5", borderRadius:8, padding:"8px 12px" }}>
+              ⏱ Tiempo de entrega presupuestado: <b>{pres.tiempoEntrega}</b>
+            </div>
+          )}
+        </div>
+        <div style={{ display:"flex", gap:10, marginTop:22 }}>
+          <button onClick={onClose} style={{ flex:1, padding:"11px", background:"transparent", border:"1.5px solid #f0d5c0", color:"#a09080", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={confirmar} disabled={saving}
+            style={{ flex:2, padding:"11px", background:"#2e7d32", color:"#fff", border:"none", borderRadius:8, fontSize:14, fontWeight:700, cursor:"pointer" }}>
+            {saving ? "Creando pedido..." : "✅ Aprobar y crear pedido"}
+          </button>
         </div>
       </div>
     </div>
@@ -7557,6 +8135,76 @@ function EntregaModal({ pedido, onConfirmar, onClose }) {
   );
 }
 
+// ── Modal: Entrega múltiple ──────────────────────────────────────────────
+function EntregaMultipleModal({ pedidos, onConfirmar, onClose }) {
+  const [metodoPago, setMetodoPago] = useState("Efectivo");
+  const [saving, setSaving]         = useState(false);
+  const saldoDe = p => parseFloat(p.precio||0) - parseFloat(p.seña||0);
+  const total   = pedidos.reduce((s,p) => s + saldoDe(p), 0);
+  const sinCliente = pedidos.filter(p => !p.clienteId).length;
+
+  const confirmar = async () => {
+    setSaving(true);
+    try { await onConfirmar(pedidos, metodoPago); }
+    catch(e) { console.error(e); alert("Hubo un error al registrar las entregas."); setSaving(false); }
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:16 }} onClick={saving?undefined:onClose}>
+      <div style={{ background:"#fff", borderRadius:16, padding:"28px 32px", width:480, maxHeight:"90vh", overflowY:"auto", boxShadow:"0 20px 60px rgba(0,0,0,.2)" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ textAlign:"center", marginBottom:18 }}>
+          <div style={{ fontSize:44, marginBottom:8 }}>📦</div>
+          <div style={{ fontSize:21, fontWeight:700, color:"#1a2340" }}>Entregar {pedidos.length} pedido{pedidos.length!==1?"s":""}</div>
+        </div>
+
+        <div style={{ background:"#fff8f5", borderRadius:10, padding:"10px 14px", marginBottom:16, maxHeight:220, overflowY:"auto" }}>
+          {pedidos.map(p => (
+            <div key={p.fireId} style={{ display:"flex", justifyContent:"space-between", gap:10, padding:"6px 0", borderBottom:"1px solid #f5e8e0", fontSize:13 }}>
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontWeight:600, color:"#1a2340", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  {p.nroOT ? <span style={{ fontFamily:"monospace", color:"#e65100", marginRight:6 }}>OT-{String(p.nroOT).padStart(4,"0")}</span> : null}{p.nombre}
+                </div>
+                <div style={{ fontSize:11, color:"#a09080" }}>{p.cliente||"Sin cliente"}</div>
+              </div>
+              <div style={{ fontWeight:700, color:saldoDe(p)>0?"#c62828":"#2e7d32", whiteSpace:"nowrap" }}>${saldoDe(p).toLocaleString("es-AR")}</div>
+            </div>
+          ))}
+          <div style={{ display:"flex", justifyContent:"space-between", paddingTop:10 }}>
+            <span style={{ fontWeight:700, color:"#1a2340" }}>Total a cobrar</span>
+            <span style={{ fontSize:20, fontWeight:800, color:total>0?"#c62828":"#2e7d32" }}>${total.toLocaleString("es-AR")}</span>
+          </div>
+        </div>
+
+        <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#4a5568", marginBottom:10 }}>Método de pago (se aplica a todos):</label>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:metodoPago==="Cuenta Corriente"&&sinCliente?10:20 }}>
+          {[["Efectivo","💵 Efectivo"],["Transferencia","📲 Transferencia"],["Tarjeta de Crédito","💳 Tarjeta"],["Cuenta Corriente","📒 Cta. Corriente"]].map(([m,l])=>(
+            <button key={m} onClick={()=>setMetodoPago(m)}
+              style={{ padding:"10px 8px", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer",
+                border:`2px solid ${metodoPago===m?"#e65100":"#f0d5c0"}`, background:metodoPago===m?"#e65100":"#fff", color:metodoPago===m?"#fff":"#4a5568" }}>{l}</button>
+          ))}
+        </div>
+        {metodoPago==="Cuenta Corriente" && sinCliente>0 && (
+          <div style={{ fontSize:12, color:"#c62828", background:"#ffebee", padding:"8px 12px", borderRadius:7, marginBottom:16 }}>
+            ⚠️ {sinCliente} pedido{sinCliente!==1?"s no tienen":" no tiene"} cliente vinculado: se marcan entregados pero no suman a ninguna cuenta corriente.
+          </div>
+        )}
+        <div style={{ fontSize:12, color:"#a09080", marginBottom:16 }}>
+          Si alguno se pagó distinto, entregalo aparte con su propio botón 📦.
+        </div>
+
+        <div style={{ display:"flex", gap:10 }}>
+          <button onClick={onClose} disabled={saving}
+            style={{ flex:1, padding:"11px", background:"transparent", border:"1.5px solid #f0d5c0", color:"#a09080", borderRadius:8, fontSize:14, fontWeight:600, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={confirmar} disabled={saving}
+            style={{ flex:2, padding:"11px", background:"#e65100", color:"#fff", border:"none", borderRadius:8, fontSize:14, fontWeight:700, cursor:"pointer" }}>
+            {saving ? "Registrando..." : `✅ Confirmar ${pedidos.length} entrega${pedidos.length!==1?"s":""}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Componente: Modal Mensaje WhatsApp ───────────────────────────────────
 function MsgModal({ pedido, copied, setCopied, onClose }) {
   const p    = pedido;
@@ -7856,7 +8504,47 @@ export default function App() {
     triggerMsgIfNeeded(prev, updated);
   };
 
+  // Barra de vistas de Pedidos: Por categoría · Kanban · Calendario · Listos
+  const renderSelectorVistas = () => {
+    const nListos = pedidos.filter(p => p.estado==="Listo").length;
+    const activo  = view==="listos" ? "listos" : vistaLista;
+    const btn = (id, label, onClick, extra) => (
+      <button key={id} onClick={onClick}
+        style={{ padding:"8px 18px", borderRadius:20, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", border:"none", transition:"all .18s",
+          display:"flex", alignItems:"center", gap:7,
+          background: activo===id ? "#e65100" : "#fff",
+          color:      activo===id ? "#fff"    : "#4a5568",
+          boxShadow:  activo===id ? "0 3px 12px rgba(230,81,0,.25)" : "0 2px 8px rgba(230,81,0,.07)" }}>
+        {label}{extra}
+      </button>
+    );
+    return (
+      <div style={{ display:"flex", gap:8, marginBottom:20, alignItems:"center", flexWrap:"wrap" }}>
+        {btn("categorias", "📋 Por Categoría", () => { setVistaLista("categorias"); setView("lista"); })}
+        {btn("kanban",     "🗂 Kanban",        () => { setVistaLista("kanban");     setView("lista"); })}
+        {btn("calendario", "📅 Calendario",    () => setView("pedidosOnline"))}
+        {btn("listos",     "✅ Listos",        () => setView("listos"),
+          nListos > 0 && <span style={{ background: activo==="listos"?"rgba(255,255,255,.3)":"#fff3e0", color: activo==="listos"?"#fff":"#e65100", borderRadius:20, padding:"0 8px", fontSize:12, fontWeight:700 }}>{nListos}</span>)}
+      </div>
+    );
+  };
+
+  const [entregaMultiple, setEntregaMultiple] = useState(null); // array de pedidos
+
   const confirmarEntrega = async (pedido, metodoPago) => {
+    await registrarEntrega(pedido, metodoPago);
+    setEntregaModal(null);
+    showToast(`Pedido entregado · $${parseFloat(pedido.precio||0).toLocaleString("es-AR")} registrado en Finanzas ✅`);
+  };
+
+  const confirmarEntregaMultiple = async (lista, metodoPago) => {
+    for (const p of lista) await registrarEntrega(p, metodoPago);
+    const total = lista.reduce((s,p) => s + parseFloat(p.precio||0), 0);
+    setEntregaMultiple(null);
+    showToast(`${lista.length} pedido${lista.length!==1?"s":""} entregado${lista.length!==1?"s":""} · $${total.toLocaleString("es-AR")} registrado en Finanzas ✅`);
+  };
+
+  const registrarEntrega = async (pedido, metodoPago) => {
     // 1. Marcar pedido como entregado
     await updateDoc(doc(db, "pedidos", pedido.fireId), { estado: "Entregado" });
     // 2. Registrar en ventas de finanzas
@@ -7882,8 +8570,6 @@ export default function App() {
         await updateDoc(doc(db, "clientes", pedido.clienteId), { saldoCuenta: nuevoSaldo });
       }
     }
-    setEntregaModal(null);
-    showToast(`Pedido entregado · $${parseFloat(pedido.precio||0).toLocaleString("es-AR")} registrado en Finanzas ✅`);
   };
 
   const handleEdit = (p) => {
@@ -8082,6 +8768,10 @@ export default function App() {
               <span className="sidebar-icon">💰</span>
               <span className="sidebar-label">Ventas</span>
             </button>
+            <button className={`sidebar-item ${view==="presupuestos"?"act":""}`} onClick={()=>{ setView("presupuestos"); }}>
+              <span className="sidebar-icon">📋</span>
+              <span className="sidebar-label">Presupuestos</span>
+            </button>
             <button className={`sidebar-item ${(view==="agenda")?"act":""}` + ""} onClick={()=>{ setView("agenda"); }}>
               <span className="sidebar-icon">📅</span>
               <span className="sidebar-label">Agenda</span>
@@ -8108,14 +8798,6 @@ export default function App() {
               <span className="sidebar-label">Configuración</span>
             </button>
 
-            {/* Listos badge */}
-            {(view==="lista"||view==="listos"||view==="formulario"||view==="detalle") && pedidos.filter(p=>p.estado==="Listo").length > 0 && (
-              <button className={`sidebar-item ${view==="listos"?"act":""}`} onClick={()=>setView("listos")} style={{ marginTop:-2 }}>
-                <span className="sidebar-icon">✅</span>
-                <span className="sidebar-label">Listos</span>
-                <span className="sidebar-badge">{pedidos.filter(p=>p.estado==="Listo").length}</span>
-              </button>
-            )}
           </nav>
 
           {/* Finanzas al fondo */}
@@ -8158,6 +8840,7 @@ export default function App() {
           view==="editarInsumo" ? "🏷️ Servicios y Productos" :
           view==="ventas" ? "💰 Ventas" :
           view==="nuevaVenta" ? "💰 Ventas" :
+          view==="presupuestos" ? "📋 Presupuestos" :
           view==="agenda" ? "📅 Agenda" :
           view==="proveedores" ? "🏭 Proveedores" :
           view==="nuevoProveedor" ? "🏭 Proveedores" :
@@ -8293,27 +8976,7 @@ export default function App() {
         {/* ── LISTA ── */}
         {view==="lista" && (
           <div>
-            {/* Selector de vista */}
-            <div style={{ display:"flex", gap:8, marginBottom:20, alignItems:"center", flexWrap:"wrap" }}>
-              {[
-                { id:"categorias", label:"📋 Por Categoría" },
-                { id:"kanban",     label:"🗂 Kanban" },
-              ].map(v => (
-                <button key={v.id} onClick={() => setVistaLista(v.id)}
-                  style={{ padding:"8px 18px", borderRadius:20, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", border:"none", transition:"all .18s",
-                    background: vistaLista===v.id ? "#e65100" : "#fff",
-                    color:      vistaLista===v.id ? "#fff"    : "#4a5568",
-                    boxShadow:  vistaLista===v.id ? "0 3px 12px rgba(230,81,0,.25)" : "0 2px 8px rgba(230,81,0,.07)" }}>
-                  {v.label}
-                </button>
-              ))}
-              <button onClick={() => setView("pedidosOnline")}
-                style={{ padding:"8px 18px", borderRadius:20, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", border:"none", transition:"all .18s",
-                  background:"#fff", color:"#4a5568",
-                  boxShadow:"0 2px 8px rgba(230,81,0,.07)" }}>
-                📅 Calendario
-              </button>
-            </div>
+            {renderSelectorVistas()}
 
             {/* Filtros — solo en vista categorías */}
             {vistaLista === "categorias" && (
@@ -8771,8 +9434,11 @@ export default function App() {
         })()}
 
         {/* ── VISTA PEDIDOS LISTOS ── */}
+        {view==="listos" && renderSelectorVistas()}
         {view==="listos" && (
           <PedidosListos
+            showToast={showToast}
+            onEntregarVarios={lista => setEntregaMultiple(lista)}
             pedidos={pedidos}
             saldo={saldo}
             isHoy={isHoy}
@@ -8844,6 +9510,11 @@ export default function App() {
           <NuevaVentaView setView={setView} showToast={showToast} clientes={clientes} empresa={empresa} configCargada={configCargada} />
         )}
 
+        {/* ── PRESUPUESTOS ── */}
+        {view==="presupuestos" && (
+          <PresupuestosView showToast={showToast} clientes={clientes} empresa={empresa} setView={setView} setSelectedPedido={setSelectedPedido} />
+        )}
+
         {/* ── AGENDA ── */}
         {view==="agenda" && (
           <AgendaView
@@ -8897,6 +9568,13 @@ export default function App() {
         />
       )}
 
+      {entregaMultiple && (
+        <EntregaMultipleModal
+          pedidos={entregaMultiple}
+          onConfirmar={confirmarEntregaMultiple}
+          onClose={() => setEntregaMultiple(null)}
+        />
+      )}
       {entregaModal && (
         <EntregaModal
           pedido={entregaModal.pedido}
