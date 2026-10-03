@@ -1731,17 +1731,6 @@ const LOCALES = {
       { id:"Otros",           label:"OTROS",           color:"#37474f", bg:"#eceff1" },
     ],
   },
-  libreria: {
-    label: "📚 Librería",
-    coleccion: "pedidosOnlineLibreria",
-    cats: [
-      { id:"impresiones", label:"IMPRESIONES", color:"#1565c0", bg:"#e3f2fd" },
-      { id:"anillados",   label:"ANILLADOS",   color:"#6a1b9a", bg:"#f3e5f5" },
-      { id:"libros",      label:"LIBROS",      color:"#1b5e20", bg:"#e8f5e9" },
-      { id:"libreria",    label:"LIBRERÍA",    color:"#e65100", bg:"#fff3e0" },
-      { id:"otros",       label:"OTROS",       color:"#37474f", bg:"#eceff1" },
-    ],
-  },
 };
 
 // Mapa categoría presencial → id de cat en la grilla de gráfica
@@ -1772,7 +1761,7 @@ function getLunes(fecha) {
 function semanaKey(lunes) { return lunes.toISOString().split("T")[0]; }
 
 function PedidosOnlineView({ showToast, setView: setViewApp, setSelectedPedido, clientes }) {
-  const [local, setLocal]               = useState("grafica");
+  const local = "grafica"; // único calendario (Librería eliminado)
   const [semanaInicio, setSemanaInicio] = useState(()=>getLunes(new Date()));
   const [grilla, setGrilla]             = useState({});
   const [loading, setLoading]           = useState(true);
@@ -1940,20 +1929,6 @@ function PedidosOnlineView({ showToast, setView: setViewApp, setSelectedPedido, 
 
   return (
     <div>
-      {/* Selector de local */}
-      <div style={{ display:"flex", gap:8, marginBottom:18 }}>
-        {Object.entries(LOCALES).map(([id,l])=>(
-          <button key={id} onClick={()=>{ setLocal(id); setGrilla({}); setDocId(null); }}
-            style={{ padding:"10px 24px", borderRadius:20, fontSize:14, fontWeight:700,
-              cursor:"pointer", border:"none", fontFamily:"'DM Sans',sans-serif",
-              background:local===id?"#1a2340":"#fff",
-              color:local===id?"#fff":"#4a5568",
-              boxShadow:local===id?"0 3px 10px rgba(26,35,64,.2)":"0 1px 6px rgba(0,0,0,.06)" }}>
-            {l.label}
-          </button>
-        ))}
-      </div>
-
       {/* Nav semanas */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18, flexWrap:"wrap", gap:10 }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
@@ -8935,38 +8910,6 @@ export default function App() {
 
           <div className="main-content" onClick={()=>{ if(window.innerWidth<=900) setMenuAbierto(false); }}>
 
-
-        {/* STATS — solo en pestaña Pedidos */}
-        {(view==="lista"||view==="listos"||view==="formulario"||view==="detalle") && (
-          <div style={{ marginBottom:26 }}>
-            <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}>
-              <button onClick={() => setShowStats(s=>!s)}
-                style={{ background:"transparent", border:"none", fontSize:12, color:"#a09080", cursor:"pointer", display:"flex", alignItems:"center", gap:5, fontFamily:"'DM Sans',sans-serif", padding:"4px 8px", borderRadius:6, transition:"all .18s" }}
-                onMouseOver={e=>e.currentTarget.style.color="#e65100"}
-                onMouseOut={e=>e.currentTarget.style.color="#a09080"}>
-                {showStats ? "▲ Ocultar resumen" : "▼ Mostrar resumen"}
-              </button>
-            </div>
-            {showStats && (
-              <div className="grid-stats">
-                {[
-                  { label:"Activos",            value:stats.total,      icon:"📁", color:"#e65100" },
-                  { label:"Pendientes",         value:stats.pendiente,  icon:"⏳", color:"#616161" },
-                  { label:"En Producción",      value:stats.produccion, icon:"⚙️", color:"#bf360c" },
-                  { label:"Listos p/ entregar", value:stats.listo,      icon:"✅", color:"#f57f17" },
-                ].map((s,i) => (
-                  <div key={i} className="card" style={{ padding:"16px 18px" }}>
-                    <div style={{ fontSize:10, fontWeight:600, color:"#a09080", textTransform:"uppercase", letterSpacing:".7px", marginBottom:7 }}>{s.label}</div>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:28, fontWeight:700, color:s.color, lineHeight:1 }}>{s.value}</div>
-                      <div style={{ fontSize:22, opacity:.75 }}>{s.icon}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* ── LISTA ── */}
         {view==="lista" && (
