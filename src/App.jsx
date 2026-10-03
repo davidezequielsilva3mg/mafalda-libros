@@ -8756,14 +8756,6 @@ export default function App() {
               <span className="sidebar-icon">📅</span>
               <span className="sidebar-label">Calendario</span>
             </button>
-            <button className={`sidebar-item ${(view==="clientes"||view==="nuevoCliente"||view==="editarCliente")?"act":""}` + ""} onClick={()=>{ setView("clientes"); }}>
-              <span className="sidebar-icon">👥</span>
-              <span className="sidebar-label">Clientes</span>
-            </button>
-            <button className={`sidebar-item ${(view==="insumos"||view==="nuevoInsumo"||view==="editarInsumo")?"act":""}` + ""} onClick={()=>{ setView("insumos"); }}>
-              <span className="sidebar-icon">🏷️</span>
-              <span className="sidebar-label">Servicios y Productos</span>
-            </button>
             <button className={`sidebar-item ${(view==="ventas"||view==="nuevaVenta")?"act":""}` + ""} onClick={()=>{ setView("ventas"); }}>
               <span className="sidebar-icon">💰</span>
               <span className="sidebar-label">Ventas</span>
@@ -8772,27 +8764,34 @@ export default function App() {
               <span className="sidebar-icon">📋</span>
               <span className="sidebar-label">Presupuestos</span>
             </button>
-            <button className={`sidebar-item ${(view==="agenda")?"act":""}` + ""} onClick={()=>{ setView("agenda"); }}>
-              <span className="sidebar-icon">📅</span>
-              <span className="sidebar-label">Agenda</span>
-            </button>
-            <button className={`sidebar-item ${(view==="proveedores"||view==="nuevoProveedor"||view==="editarProveedor")?"act":""}` + ""} onClick={()=>{ setView("proveedores"); }}>
-              <span className="sidebar-icon">🏭</span>
-              <span className="sidebar-label">Proveedores</span>
-            </button>
             <button className="sidebar-item" onClick={()=>window.open("https://mafalda-cotizador.vercel.app","_blank")}>
               <span className="sidebar-icon">💲</span>
               <span className="sidebar-label">Cotizador</span>
-            </button>
-            <button className={`sidebar-item ${view==="produccion"?"act":""}`} onClick={()=>{ setView("produccion"); }}>
-              <span className="sidebar-icon">📊</span>
-              <span className="sidebar-label">Producción</span>
             </button>
             <button className="sidebar-item" onClick={()=>window.open("https://mafalda-photoprint.vercel.app","_blank")}>
               <span className="sidebar-icon">📷</span>
               <span className="sidebar-label">PhotoPrint</span>
             </button>
-
+            <button className={`sidebar-item ${(view==="insumos"||view==="nuevoInsumo"||view==="editarInsumo")?"act":""}` + ""} onClick={()=>{ setView("insumos"); }}>
+              <span className="sidebar-icon">🏷️</span>
+              <span className="sidebar-label">Servicios y Productos</span>
+            </button>
+            <button className={`sidebar-item ${(view==="clientes"||view==="nuevoCliente"||view==="editarCliente")?"act":""}` + ""} onClick={()=>{ setView("clientes"); }}>
+              <span className="sidebar-icon">👥</span>
+              <span className="sidebar-label">Clientes</span>
+            </button>
+            <button className={`sidebar-item ${(view==="proveedores"||view==="nuevoProveedor"||view==="editarProveedor")?"act":""}` + ""} onClick={()=>{ setView("proveedores"); }}>
+              <span className="sidebar-icon">🏭</span>
+              <span className="sidebar-label">Proveedores</span>
+            </button>
+            <button className={`sidebar-item ${(view==="agenda")?"act":""}` + ""} onClick={()=>{ setView("agenda"); }}>
+              <span className="sidebar-icon">📅</span>
+              <span className="sidebar-label">Agenda</span>
+            </button>
+            <button className={`sidebar-item ${view==="produccion"?"act":""}`} onClick={()=>{ setView("produccion"); }}>
+              <span className="sidebar-icon">📊</span>
+              <span className="sidebar-label">Producción</span>
+            </button>
             <button className={`sidebar-item ${(view==="config")?"act":""}` + ""} onClick={()=>{ setView("config"); }}>
               <span className="sidebar-icon">⚙️</span>
               <span className="sidebar-label">Configuración</span>
@@ -8805,10 +8804,6 @@ export default function App() {
             <button className={`sidebar-item finanzas-item ${view==="finanzas"?"act":""}`} onClick={()=>setView("finanzas")}>
               <span className="sidebar-icon">💼</span>
               <span className="sidebar-label">Finanzas</span>
-            </button>
-            <button className="sidebar-item" onClick={()=>window.open("https://mafalda-photoprint.vercel.app","_blank")} style={{ marginTop:4 }}>
-              <span className="sidebar-icon">🖼️</span>
-              <span className="sidebar-label">PhotoPrint</span>
             </button>
             <button className="sidebar-item" onClick={handleLogout} style={{ marginTop:4 }}>
               <span className="sidebar-icon">🔒</span>
@@ -8855,7 +8850,7 @@ export default function App() {
 
             {/* Botones contextuales en topbar */}
             {(view==="lista"||view==="formulario"||view==="detalle") && (
-              <button className="ctx-btn" onClick={()=>{ setFormData(EMPTY_FORM); setEditingId(null); setErrors({}); setSelectedClienteId(null); setClienteSearch(""); setView("formulario"); }}>
+              <button className="ctx-btn" onClick={()=>{ setFormData({ ...EMPTY_FORM, fechaPedido: new Date().toLocaleDateString("sv-SE") }); setEditingId(null); setErrors({}); setSelectedClienteId(null); setClienteSearch(""); setView("formulario"); }}>
                 + Nuevo Pedido
               </button>
             )}
