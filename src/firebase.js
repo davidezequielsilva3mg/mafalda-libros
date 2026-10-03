@@ -3,14 +3,15 @@ import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCbNFlEVmq5JLEowiX4_dJmco05t-1uRwM",
-  authDomain: "mafalda-grafica.firebaseapp.com",
-  projectId: "mafalda-grafica",
-  storageBucket: "mafalda-grafica.firebasestorage.app",
-  messagingSenderId: "1036113368691",
-  appId: "1:1036113368691:web:ed09d55b4e2806e5ee7c06"
+  apiKey: "AIzaSyCx4Ip78dF256cFuOqs4JpHyCdd4cCwzZ8",
+  authDomain: "mafaldalibrosvc.firebaseapp.com",
+  projectId: "mafaldalibrosvc",
+  storageBucket: "mafaldalibrosvc.firebasestorage.app",
+  messagingSenderId: "327638875278",
+  appId: "1:327638875278:web:a25a6dd8d6cc9843fd1ddf",
+  measurementId: "G-LB3ZWGCYP5"
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export const db   = getFirestore(app);
 export const auth = getAuth(app);

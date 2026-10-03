@@ -1,7 +1,7 @@
 {
-  "name": "Mafalda Gráfica",
-  "short_name": "Mafalda",
-  "description": "Sistema de gestión para Mafalda Gráfica",
+  "name": "Mafalda Libros",
+  "short_name": "M. Libros",
+  "description": "Sistema de gestión para Mafalda Libros",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#fff8f5",
