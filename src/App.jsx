@@ -10,30 +10,140 @@ import {
 
 const auth = getAuth();
 
-const CATEGORIAS = [
-  "Vinilo Impreso", "Vinilo Calado", "Diseño", "Impresiones",
-  "DTF", "Sublimado", "Estampado", "Talonarios", "Lona", "3D", "Otros"
+// ── Categorías (editables desde Configuración, guardadas en config/categorias) ──
+const PALETA_CATEGORIAS = [
+  { bg:"#fff3e0", text:"#bf360c", accent:"#ff9800" }, // naranja
+  { bg:"#e8eaf6", text:"#283593", accent:"#3949ab" }, // índigo
+  { bg:"#fce4ec", text:"#880e4f", accent:"#e91e63" }, // rosa
+  { bg:"#e0f2f1", text:"#004d40", accent:"#009688" }, // verde agua
+  { bg:"#f3e5f5", text:"#4a148c", accent:"#9c27b0" }, // violeta
+  { bg:"#fff8e1", text:"#f57f17", accent:"#ffc107" }, // amarillo
+  { bg:"#e8f5e9", text:"#1b5e20", accent:"#4caf50" }, // verde
+  { bg:"#efebe9", text:"#3e2723", accent:"#795548" }, // marrón
+  { bg:"#e3f2fd", text:"#0d47a1", accent:"#1976d2" }, // azul
+  { bg:"#ffebee", text:"#b71c1c", accent:"#e53935" }, // rojo
+  { bg:"#eceff1", text:"#263238", accent:"#607d8b" }, // gris azulado
+  { bg:"#f5f5f5", text:"#424242", accent:"#9e9e9e" }, // gris
 ];
 
-const CATEGORIA_ICON = {
-  "Vinilo Impreso": "🖨️", "Vinilo Calado": "✂️", "Diseño": "🎨",
-  "Impresiones": "📄", "DTF": "👕", "Sublimado": "🌈",
-  "Estampado": "🔖", "Talonarios": "📒", "Lona": "🪧", "3D": "🖨️", "Otros": "📦"
-};
+const CATEGORIAS_DEFAULT = [
+  { nombre:"Vinilo Impreso", icono:"🖨️", bg:"#fff3e0", text:"#bf360c", accent:"#1976d2" },
+  { nombre:"Vinilo Calado",  icono:"✂️", bg:"#e8eaf6", text:"#283593", accent:"#3949ab" },
+  { nombre:"Diseño",         icono:"🎨", bg:"#fce4ec", text:"#880e4f", accent:"#e91e63" },
+  { nombre:"Impresiones",    icono:"📄", bg:"#e0f2f1", text:"#004d40", accent:"#009688" },
+  { nombre:"DTF",            icono:"👕", bg:"#fff3e0", text:"#e65100", accent:"#ff9800" },
+  { nombre:"Sublimado",      icono:"🌈", bg:"#f3e5f5", text:"#4a148c", accent:"#9c27b0" },
+  { nombre:"Estampado",      icono:"🔖", bg:"#fff8e1", text:"#f57f17", accent:"#ffc107" },
+  { nombre:"Talonarios",     icono:"📒", bg:"#e8f5e9", text:"#1b5e20", accent:"#4caf50" },
+  { nombre:"Lona",           icono:"🪧", bg:"#efebe9", text:"#3e2723", accent:"#795548" },
+  { nombre:"3D",             icono:"🖨️", bg:"#e8f5e9", text:"#1b5e20", accent:"#388e3c" },
+  { nombre:"Otros",          icono:"📦", bg:"#f5f5f5", text:"#424242", accent:"#9e9e9e" },
+];
 
-const CATEGORIA_COLOR = {
-  "Vinilo Impreso": { bg: "#fff3e0", text: "#bf360c", accent: "#1976d2" },
-  "Vinilo Calado":  { bg: "#e8eaf6", text: "#283593", accent: "#3949ab" },
-  "Diseño":         { bg: "#fce4ec", text: "#880e4f", accent: "#e91e63" },
-  "Impresiones":    { bg: "#e0f2f1", text: "#004d40", accent: "#009688" },
-  "DTF":            { bg: "#fff3e0", text: "#e65100", accent: "#ff9800" },
-  "Sublimado":      { bg: "#f3e5f5", text: "#4a148c", accent: "#9c27b0" },
-  "Estampado":      { bg: "#fff8e1", text: "#f57f17", accent: "#ffc107" },
-  "Talonarios":     { bg: "#e8f5e9", text: "#1b5e20", accent: "#4caf50" },
-  "Lona":           { bg: "#efebe9", text: "#3e2723", accent: "#795548" },
-  "3D":             { bg: "#e8f5e9", text: "#1b5e20", accent: "#388e3c" },
-  "Otros":          { bg: "#f5f5f5", text: "#424242", accent: "#9e9e9e" },
+const COLOR_CAT_DEFAULT = { bg:"#f5f5f5", text:"#424242", accent:"#9e9e9e" };
+
+// Estos tres objetos se actualizan "en el lugar" cuando cambia la configuración,
+// así todo el código que ya los usa sigue funcionando sin cambios.
+const CATEGORIAS = [];
+const _catIcon  = {};
+const _catColor = {};
+// Si un pedido tiene una categoría que ya no existe, se muestra igual con ícono y color neutros
+const CATEGORIA_ICON  = new Proxy(_catIcon,  { get:(t,k) => (typeof k==="string" && !(k in t)) ? "📦" : t[k] });
+const CATEGORIA_COLOR = new Proxy(_catColor, { get:(t,k) => (typeof k==="string" && !(k in t)) ? COLOR_CAT_DEFAULT : t[k] });
+
+function aplicarCategorias(lista) {
+  const validas = (lista && lista.length ? lista : CATEGORIAS_DEFAULT).filter(x => x && x.nombre);
+  CATEGORIAS.splice(0, CATEGORIAS.length, ...validas.map(x => x.nombre));
+  validas.forEach(x => {
+    _catIcon[x.nombre]  = x.icono || "📦";
+    _catColor[x.nombre] = { bg:x.bg||COLOR_CAT_DEFAULT.bg, text:x.text||COLOR_CAT_DEFAULT.text, accent:x.accent||COLOR_CAT_DEFAULT.accent };
+  });
+}
+aplicarCategorias(CATEGORIAS_DEFAULT);
+
+// ── Configuración general de la app (config/app en Firebase) ─────────────
+const APP_CFG_DEFAULT = {
+  msgListoSaldo: "¡Hola {nombre}! 👋\nTu pedido *{ot}{pedido}* ya está listo para retirar 🎉\nEl monto total es ${total} y resta abonar *${saldo}*.\n¡Muchas gracias por elegirnos! 🙌",
+  msgListoPago:  "¡Hola {nombre}! 👋\nTu pedido *{ot}{pedido}* ya está listo para retirar 🎉\nEl total abonado es ${total}. ¡Todo pago!\n¡Muchas gracias por elegirnos! 🙌",
+  prefijoWhatsapp: "549",
+  validezPresupuesto: 7,
+  condicionesPresupuesto: "Sujeto a cambios de precio",
+  piePresupuesto: "",
+  firmaOrden: "Firma operario",
+  pieOrden: "",
+  accesos: [
+    { nombre:"Cotizador",  icono:"💲", url:"https://mafalda-cotizador.vercel.app" },
+    { nombre:"PhotoPrint", icono:"📷", url:"https://mafalda-photoprint.vercel.app" },
+  ],
+  metodosPago: [
+    { nombre:"Transferencia",      icono:"📲", corto:"Transferencia" },
+    { nombre:"Tarjeta de Crédito", icono:"💳", corto:"Tarjeta" },
+  ],
 };
+// Se actualiza "en el lugar" al cargar Firebase, así funciones como buildOrdenHTML lo leen directo
+const APP_CFG = JSON.parse(JSON.stringify(APP_CFG_DEFAULT));
+function aplicarAppCfg(datos) {
+  const d = datos || {};
+  Object.keys(APP_CFG_DEFAULT).forEach(k => {
+    APP_CFG[k] = d[k] !== undefined ? d[k] : JSON.parse(JSON.stringify(APP_CFG_DEFAULT[k]));
+  });
+}
+
+// Efectivo y Cuenta Corriente son fijos: el sistema los usa para la caja y para el saldo de clientes
+const METODO_EFECTIVO = { nombre:"Efectivo",         icono:"💵", corto:"Efectivo",       fijo:true };
+const METODO_CTACTE   = { nombre:"Cuenta Corriente", icono:"📒", corto:"Cta. Corriente", fijo:true };
+function getMetodosPago() {
+  return [METODO_EFECTIVO, ...(APP_CFG.metodosPago||[]).filter(m => m && m.nombre), METODO_CTACTE];
+}
+function labelMetodo(nombre) {
+  const m = getMetodosPago().find(x => x.nombre === nombre);
+  return m ? `${m.icono||""} ${m.corto||m.nombre}`.trim() : nombre;
+}
+const COLORES_METODO = [
+  { color:"#2e7d32", bg:"#e8f5e9" }, { color:"#1565c0", bg:"#e3f2fd" }, { color:"#6a1b9a", bg:"#f3e5f5" },
+  { color:"#00695c", bg:"#e0f2f1" }, { color:"#ad1457", bg:"#fce4ec" }, { color:"#f57f17", bg:"#fff8e1" },
+  { color:"#37474f", bg:"#eceff1" },
+];
+// Métodos configurados + los que aparezcan en ventas viejas (para no perder historial)
+function metodosConHistorial(ventas) {
+  const base = getMetodosPago().map(m => m.nombre);
+  const extra = [...new Set((ventas||[]).map(v => v.metodoPago).filter(Boolean))].filter(n => !base.includes(n));
+  return [...base, ...extra].map((nombre, i) => ({
+    nombre, label: labelMetodo(nombre),
+    ...(nombre==="Cuenta Corriente" ? { color:"#e65100", bg:"#fff3e0" } : COLORES_METODO[i % COLORES_METODO.length]),
+  }));
+}
+
+// Arma el mensaje de WhatsApp de "pedido listo" a partir de la plantilla
+function armarMensajeListo(p) {
+  const total    = parseFloat(p.precio||0);
+  const saldoNum = total - parseFloat(p.seña||0);
+  const plantilla = saldoNum > 0 ? APP_CFG.msgListoSaldo : APP_CFG.msgListoPago;
+  const valores = {
+    nombre: p.cliente?.split(" ")[0] || p.cliente || "cliente",
+    cliente: p.cliente || "",
+    ot:     p.nroOT ? `N° ${String(p.nroOT).padStart(4,"0")} - ` : "",
+    pedido: p.nombre || "",
+    total:  total.toLocaleString("es-AR"),
+    saldo:  saldoNum.toLocaleString("es-AR"),
+    seña:   parseFloat(p.seña||0).toLocaleString("es-AR"),
+  };
+  return (plantilla||"").split("\n")
+    // si el pedido no tiene precio, se omiten los renglones que hablan de plata
+    .filter(l => p.precio || !/\{(total|saldo|seña)\}/.test(l))
+    .map(l => l.replace(/\{(\w+)\}/g, (m, k) => valores[k] !== undefined ? valores[k] : m))
+    .join("\n");
+}
+
+// Arma el número para wa.me: si ya trae código de país lo respeta, si no le agrega el prefijo configurado
+function telWhatsapp(tel) {
+  let d = (tel||"").replace(/\D/g,"");
+  if (!d) return "";
+  const pref = (APP_CFG.prefijoWhatsapp||"").replace(/\D/g,"");
+  if (pref && d.startsWith(pref.slice(0,2))) return d;   // ya tiene código de país (ej: 54...)
+  d = d.replace(/^0/, "");
+  return pref + d;
+}
 
 const ESTADOS = ["Todos", "Pendiente", "En Producción", "Listo", "Entregado"];
 const ESTADO_COLOR = {
@@ -44,7 +154,7 @@ const ESTADO_COLOR = {
 };
 
 const EMPTY_FORM = {
-  nombre: "", cliente: "", telefono: "", categoria: "Vinilo Impreso",
+  nombre: "", cliente: "", telefono: "", categoria: "",
   estado: "Pendiente", fechaPedido: "", fechaEntrega: "", precio: "",
   seña: "", notas: "", notasItems: [""], tomadoPor: ""
 };
@@ -163,8 +273,9 @@ function buildOrdenHTML(p, empresa = EMPTY_EMPRESA) {
     <div class="fbox"><div class="flbl">Seña / Adelanto</div><div class="fval" style="color:#2e7d32">$${parseFloat(p.seña||0).toLocaleString("es-AR")}</div></div>
     <div class="fbox"><div class="flbl">Saldo a Cobrar</div><div class="fval" style="color:${saldo>0?'#c62828':'#2e7d32'}">$${saldo.toLocaleString("es-AR")}</div></div>
   </div>
+  ${APP_CFG.pieOrden?`<div style="font-size:11px;color:#4a5568;margin:14px 0 4px;padding:8px 12px;border:1px dashed #d0d0d0;border-radius:6px;white-space:pre-wrap">${APP_CFG.pieOrden}</div>`:""}
   <div class="foot">
-    <div class="firma"><div class="flin"></div><div class="flbl2">Firma operario</div></div>
+    <div class="firma"><div class="flin"></div><div class="flbl2">${APP_CFG.firmaOrden||"Firma operario"}</div></div>
     <div class="fnota">${nombre} · Sistema de Pedidos<br/>${num} · ${fecha}</div>
   </div>
 </div>
@@ -1782,7 +1893,10 @@ function PedidosOnlineView({ showToast, setView: setViewApp, setSelectedPedido, 
   const [mShowSugg,  setMShowSugg]        = useState(false);
   const [savingM,    setSavingM]          = useState(false);
 
-  const cfg = LOCALES[local];
+  const cfg = {
+    ...LOCALES[local],
+    cats: CATEGORIAS.map(n => ({ id:n, label:n.toUpperCase(), color:CATEGORIA_COLOR[n].text, bg:CATEGORIA_COLOR[n].bg })),
+  };
   const key = semanaKey(semanaInicio);
 
   const dias = DIAS_SEMANA.map((nombre, i) => {
@@ -1824,7 +1938,7 @@ function PedidosOnlineView({ showToast, setView: setViewApp, setSelectedPedido, 
     return pedidosDB.filter(p =>
       p.fechaEntrega === fecha &&
       p.estado !== "Entregado" &&
-      CAT_PRESENCIAL_MAP[p.categoria] === catId
+      p.categoria === catId
     );
   };
 
@@ -3362,6 +3476,413 @@ function KonicaView({ showToast }) {
 }
 
 // ── Componente: Configuración ─────────────────────────────────────────────
+// ── Guardar parte de la configuración general ────────────────────────────
+async function guardarAppCfg(parcial) {
+  await setDoc(doc(db, "config", "app"), { ...parcial, actualizadoEn: new Date().toISOString() }, { merge: true });
+}
+const cfgCard = { background:"#fff", borderRadius:14, boxShadow:"0 2px 14px rgba(230,81,0,.07)", padding:"26px 30px" };
+const cfgInp  = { width:"100%", padding:"10px 12px", borderRadius:8, border:"1.5px solid #f0d5c0", fontSize:14, fontFamily:"'DM Sans',sans-serif", outline:"none", boxSizing:"border-box", color:"#1a2340" };
+const cfgLbl  = { display:"block", fontSize:13, fontWeight:600, color:"#4a5568", marginBottom:6 };
+const cfgTitulo = (t, sub) => (
+  <div style={{ marginBottom:18 }}>
+    <div style={{ fontSize:20, fontWeight:700, color:"#1a2340" }}>{t}</div>
+    {sub && <div style={{ fontSize:13, color:"#a09080", marginTop:4 }}>{sub}</div>}
+  </div>
+);
+const CfgGuardar = ({ dirty, saving, onClick, texto="💾 Guardar" }) => (
+  <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"center", gap:12, marginTop:22 }}>
+    {dirty && <span style={{ fontSize:12, color:"#e65100", fontWeight:600 }}>Hay cambios sin guardar</span>}
+    <button onClick={onClick} disabled={saving||!dirty}
+      style={{ background:dirty?"#e65100":"#f0d5c0", color:"#fff", border:"none", padding:"11px 28px", borderRadius:8, fontSize:15, fontWeight:600, cursor:dirty?"pointer":"default" }}>
+      {saving ? "Guardando..." : texto}
+    </button>
+  </div>
+);
+
+// ── Configuración: Mensajes y documentos ─────────────────────────────────
+function MensajesConfig({ showToast }) {
+  const campos = ["msgListoSaldo","msgListoPago","prefijoWhatsapp","validezPresupuesto","condicionesPresupuesto","piePresupuesto","firmaOrden","pieOrden"];
+  const [f, setF]         = useState(() => Object.fromEntries(campos.map(k => [k, APP_CFG[k]])));
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [foco, setFoco]   = useState("msgListoSaldo");
+  const set = (k, v) => { setF(x => ({ ...x, [k]:v })); setDirty(true); };
+
+  const ejemplo = { cliente:"David Silva", nombre:"Tarjetas personales", nroOT:12, precio:"9000", seña: foco==="msgListoPago" ? "9000" : "4500" };
+  const preview = (() => {
+    const backup = { msgListoSaldo:APP_CFG.msgListoSaldo, msgListoPago:APP_CFG.msgListoPago };
+    APP_CFG.msgListoSaldo = f.msgListoSaldo; APP_CFG.msgListoPago = f.msgListoPago;
+    const t = armarMensajeListo(ejemplo);
+    Object.assign(APP_CFG, backup);
+    return t;
+  })();
+
+  const insertar = (marcador) => {
+    if (foco!=="msgListoSaldo" && foco!=="msgListoPago") return;
+    const el = document.getElementById("cfg-"+foco);
+    const v = f[foco] || "";
+    const pos = el ? el.selectionStart : v.length;
+    set(foco, v.slice(0,pos) + marcador + v.slice(pos));
+    setTimeout(() => { if (el) { el.focus(); el.selectionStart = el.selectionEnd = pos + marcador.length; } }, 0);
+  };
+
+  const guardar = async () => {
+    setSaving(true);
+    try { await guardarAppCfg({ ...f, validezPresupuesto: parseInt(f.validezPresupuesto)||7 }); setDirty(false); showToast("Mensajes y documentos guardados ✅"); }
+    catch(e) { console.error(e); showToast("Error al guardar","error"); }
+    setSaving(false);
+  };
+  const restaurar = (ks) => { ks.forEach(k => set(k, APP_CFG_DEFAULT[k])); };
+
+  const marcadores = [["{nombre}","Primer nombre"],["{cliente}","Nombre completo"],["{ot}","N° de OT"],["{pedido}","Nombre del pedido"],["{total}","Total"],["{saldo}","Saldo"],["{seña}","Seña"]];
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+      <div style={cfgCard}>
+        {cfgTitulo("💬 Mensaje de pedido listo", "Es el texto que se arma al marcar un pedido como Listo. Los marcadores entre llaves se reemplazan solos. Usá *asteriscos* para negrita en WhatsApp.")}
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14 }}>
+          {marcadores.map(([m,d]) => (
+            <button key={m} onClick={()=>insertar(m)} title={`Insertar: ${d}`}
+              style={{ background:"#fff8f5", border:"1.5px solid #f0d5c0", color:"#e65100", padding:"4px 10px", borderRadius:20, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"monospace" }}>
+              {m} <span style={{ fontFamily:"'DM Sans',sans-serif", fontWeight:400, color:"#a09080" }}>{d}</span>
+            </button>
+          ))}
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))", gap:16 }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div>
+              <label style={cfgLbl}>Cuando queda saldo por pagar</label>
+              <textarea id="cfg-msgListoSaldo" rows={5} value={f.msgListoSaldo} onFocus={()=>setFoco("msgListoSaldo")} onChange={e=>set("msgListoSaldo",e.target.value)}
+                style={{ ...cfgInp, resize:"vertical", fontSize:13, borderColor:foco==="msgListoSaldo"?"#e65100":"#f0d5c0" }}/>
+            </div>
+            <div>
+              <label style={cfgLbl}>Cuando está todo pago</label>
+              <textarea id="cfg-msgListoPago" rows={5} value={f.msgListoPago} onFocus={()=>setFoco("msgListoPago")} onChange={e=>set("msgListoPago",e.target.value)}
+                style={{ ...cfgInp, resize:"vertical", fontSize:13, borderColor:foco==="msgListoPago"?"#e65100":"#f0d5c0" }}/>
+            </div>
+            <div style={{ display:"flex", gap:12, alignItems:"flex-end", flexWrap:"wrap" }}>
+              <div style={{ width:160 }}>
+                <label style={cfgLbl}>Código de país WhatsApp</label>
+                <input value={f.prefijoWhatsapp} onChange={e=>set("prefijoWhatsapp",e.target.value)} placeholder="549" style={cfgInp}/>
+              </div>
+              <div style={{ fontSize:11, color:"#a09080", flex:1, minWidth:160, paddingBottom:4 }}>Para celulares de Argentina es <b>549</b>. Si el teléfono ya empieza con 54, se respeta.</div>
+            </div>
+            <button onClick={()=>restaurar(["msgListoSaldo","msgListoPago","prefijoWhatsapp"])}
+              style={{ alignSelf:"flex-start", background:"transparent", border:"1.5px solid #f0d5c0", color:"#a09080", padding:"6px 12px", borderRadius:8, fontSize:12, cursor:"pointer" }}>↺ Volver a los mensajes originales</button>
+          </div>
+          <div>
+            <label style={cfgLbl}>Vista previa ({foco==="msgListoPago" ? "todo pago" : "con saldo"})</label>
+            <div style={{ background:"#e7ffdb", borderRadius:"10px 10px 10px 2px", padding:"12px 14px", fontSize:13, color:"#1a2340", whiteSpace:"pre-wrap", lineHeight:1.5, boxShadow:"0 1px 2px rgba(0,0,0,.1)" }}>
+              {preview.split(/(\*[^*]+\*)/g).map((t,i) => t.startsWith("*")&&t.endsWith("*") ? <b key={i}>{t.slice(1,-1)}</b> : t)}
+            </div>
+            <div style={{ fontSize:11, color:"#a09080", marginTop:6 }}>Ejemplo con datos de prueba. Si un pedido no tiene precio cargado, los renglones con {"{total}"}, {"{saldo}"} o {"{seña}"} se omiten.</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={cfgCard}>
+        {cfgTitulo("📄 Presupuestos impresos")}
+        <div style={{ display:"grid", gridTemplateColumns:"140px 1fr", gap:14, marginBottom:14 }}>
+          <div>
+            <label style={cfgLbl}>Validez (días)</label>
+            <input type="number" min="1" value={f.validezPresupuesto} onChange={e=>set("validezPresupuesto",e.target.value)} style={cfgInp}/>
+          </div>
+          <div>
+            <label style={cfgLbl}>Aclaración junto a la validez</label>
+            <input value={f.condicionesPresupuesto} onChange={e=>set("condicionesPresupuesto",e.target.value)} placeholder="Sujeto a cambios de precio" style={cfgInp}/>
+          </div>
+        </div>
+        <label style={cfgLbl}>Texto al pie del presupuesto (opcional)</label>
+        <textarea rows={3} value={f.piePresupuesto} onChange={e=>set("piePresupuesto",e.target.value)}
+          placeholder="Ej: Se requiere 50% de seña para comenzar el trabajo. Precios con IVA incluido."
+          style={{ ...cfgInp, resize:"vertical", fontSize:13 }}/>
+      </div>
+
+      <div style={cfgCard}>
+        {cfgTitulo("🧾 Orden de trabajo impresa")}
+        <div style={{ marginBottom:14, maxWidth:320 }}>
+          <label style={cfgLbl}>Texto bajo la línea de firma</label>
+          <input value={f.firmaOrden} onChange={e=>set("firmaOrden",e.target.value)} placeholder="Firma operario" style={cfgInp}/>
+        </div>
+        <label style={cfgLbl}>Texto al pie de la orden (opcional)</label>
+        <textarea rows={3} value={f.pieOrden} onChange={e=>set("pieOrden",e.target.value)}
+          placeholder="Ej: Los trabajos no retirados dentro de los 30 días no podrán ser reclamados."
+          style={{ ...cfgInp, resize:"vertical", fontSize:13 }}/>
+        <CfgGuardar dirty={dirty} saving={saving} onClick={guardar} texto="💾 Guardar mensajes y documentos"/>
+      </div>
+    </div>
+  );
+}
+
+// ── Editor de lista genérico (usado por métodos de pago y accesos) ───────
+function ListaEditable({ items, setItems, columnas, onDirty }) {
+  const upd = (i, k, v) => { setItems(l => l.map((x,j) => j===i ? { ...x, [k]:v } : x)); onDirty(); };
+  const mover = (i, d) => { const j=i+d; if (j<0||j>=items.length) return; setItems(l => { const a=[...l]; [a[i],a[j]]=[a[j],a[i]]; return a; }); onDirty(); };
+  const quitar = (i) => { setItems(l => l.filter((_,j) => j!==i)); onDirty(); };
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+      {items.map((x, i) => (
+        <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:10, background:"#fffaf7", border:"1.5px solid #f5e8e0", flexWrap:"wrap" }}>
+          <div style={{ display:"flex", flexDirection:"column" }}>
+            <button onClick={()=>mover(i,-1)} disabled={i===0} style={{ background:"transparent", border:"none", cursor:"pointer", color:i===0?"#ddd":"#a09080", fontSize:11, lineHeight:1, padding:"1px 4px" }}>▲</button>
+            <button onClick={()=>mover(i,1)} disabled={i===items.length-1} style={{ background:"transparent", border:"none", cursor:"pointer", color:i===items.length-1?"#ddd":"#a09080", fontSize:11, lineHeight:1, padding:"1px 4px" }}>▼</button>
+          </div>
+          {columnas.map(col => (
+            <input key={col.k} value={x[col.k]||""} onChange={e=>upd(i,col.k,e.target.value)} placeholder={col.ph} maxLength={col.max} title={col.titulo}
+              style={{ ...cfgInp, ...(col.estilo||{}), background:"#fff" }}/>
+          ))}
+          <button onClick={()=>quitar(i)} title="Eliminar"
+            style={{ background:"#ffebee", border:"none", color:"#c62828", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:14, flexShrink:0 }}>🗑</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Configuración: Métodos de pago ───────────────────────────────────────
+function MetodosPagoConfig({ showToast }) {
+  const [items, setItems] = useState(() => JSON.parse(JSON.stringify(APP_CFG.metodosPago||[])));
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const fila = (m) => (
+    <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", borderRadius:10, background:"#f8f9fa", border:"1.5px dashed #e0e0e0" }}>
+      <span style={{ fontSize:18 }}>{m.icono}</span>
+      <span style={{ fontWeight:700, color:"#4a5568", flex:1 }}>{m.nombre}</span>
+      <span style={{ fontSize:11, color:"#a09080" }}>🔒 fijo</span>
+    </div>
+  );
+  const guardar = async () => {
+    const limpia = items.map(x => ({ nombre:(x.nombre||"").trim(), icono:(x.icono||"").trim()||"💳", corto:(x.corto||"").trim() })).filter(x => x.nombre);
+    const nombres = [...limpia.map(x=>x.nombre.toLowerCase()), "efectivo", "cuenta corriente"];
+    if (nombres.length !== new Set(nombres).size) { showToast("Hay métodos repetidos (o con el nombre de uno fijo)","error"); return; }
+    setSaving(true);
+    try { await guardarAppCfg({ metodosPago: limpia }); setItems(limpia); setDirty(false); showToast("Métodos de pago guardados ✅"); }
+    catch(e) { console.error(e); showToast("Error al guardar","error"); }
+    setSaving(false);
+  };
+  return (
+    <div style={cfgCard}>
+      {cfgTitulo("💳 Métodos de pago", "Aparecen al cobrar una venta, entregar un pedido y armar un presupuesto. Finanzas los suma por separado.")}
+      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+        {fila(METODO_EFECTIVO)}
+        <ListaEditable items={items} setItems={setItems} onDirty={()=>setDirty(true)} columnas={[
+          { k:"icono",  ph:"💳", max:4, titulo:"Ícono", estilo:{ width:52, textAlign:"center", fontSize:18, padding:"6px 4px" } },
+          { k:"nombre", ph:"Nombre (ej: Mercado Pago)", titulo:"Nombre completo", estilo:{ flex:2, minWidth:150, fontWeight:600 } },
+          { k:"corto",  ph:"Texto del botón (opcional)", titulo:"Nombre corto para los botones", estilo:{ flex:1, minWidth:120 } },
+        ]}/>
+        {fila(METODO_CTACTE)}
+      </div>
+      <button onClick={()=>{ setItems(l => [...l, { nombre:"", icono:"💳", corto:"" }]); setDirty(true); }}
+        style={{ marginTop:12, background:"#1a2340", color:"#fff", border:"none", padding:"9px 18px", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer" }}>+ Agregar método</button>
+      <div style={{ fontSize:12, color:"#a09080", marginTop:14, lineHeight:1.6 }}>
+        🔒 <b>Efectivo</b> y <b>Cuenta Corriente</b> quedan fijos: el sistema los usa para la caja y para el saldo de los clientes.<br/>
+        Si renombrás o borrás un método, las ventas viejas conservan el nombre con el que se cobraron y Finanzas las sigue mostrando.
+      </div>
+      <CfgGuardar dirty={dirty} saving={saving} onClick={guardar} texto="💾 Guardar métodos de pago"/>
+    </div>
+  );
+}
+
+// ── Configuración: Accesos directos del menú ─────────────────────────────
+function AccesosConfig({ showToast }) {
+  const [items, setItems] = useState(() => JSON.parse(JSON.stringify(APP_CFG.accesos||[])));
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const guardar = async () => {
+    const limpia = items.map(x => {
+      let url = (x.url||"").trim();
+      if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
+      return { nombre:(x.nombre||"").trim(), icono:(x.icono||"").trim()||"🔗", url };
+    }).filter(x => x.url);
+    setSaving(true);
+    try { await guardarAppCfg({ accesos: limpia }); setItems(limpia); setDirty(false); showToast("Accesos del menú guardados ✅"); }
+    catch(e) { console.error(e); showToast("Error al guardar","error"); }
+    setSaving(false);
+  };
+  return (
+    <div style={cfgCard}>
+      {cfgTitulo("🔗 Accesos directos del menú", "Aparecen en el menú lateral, después de Presupuestos, y se abren en una pestaña nueva.")}
+      {items.length===0 && <div style={{ fontSize:13, color:"#c0bdb9", fontStyle:"italic", marginBottom:10 }}>No hay accesos. Agregá uno con el botón de abajo.</div>}
+      <ListaEditable items={items} setItems={setItems} onDirty={()=>setDirty(true)} columnas={[
+        { k:"icono",  ph:"🔗", max:4, titulo:"Ícono", estilo:{ width:52, textAlign:"center", fontSize:18, padding:"6px 4px" } },
+        { k:"nombre", ph:"Nombre (ej: Drive)", titulo:"Nombre en el menú", estilo:{ flex:1, minWidth:120, fontWeight:600 } },
+        { k:"url",    ph:"Dirección (ej: drive.google.com/...)", titulo:"Dirección web", estilo:{ flex:2, minWidth:200, fontSize:13 } },
+      ]}/>
+      <div style={{ display:"flex", gap:8, marginTop:12, flexWrap:"wrap" }}>
+        <button onClick={()=>{ setItems(l => [...l, { nombre:"", icono:"🔗", url:"" }]); setDirty(true); }}
+          style={{ background:"#1a2340", color:"#fff", border:"none", padding:"9px 18px", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer" }}>+ Agregar acceso</button>
+        <button onClick={()=>{ setItems(JSON.parse(JSON.stringify(APP_CFG_DEFAULT.accesos))); setDirty(true); }}
+          style={{ background:"transparent", border:"1.5px solid #f0d5c0", color:"#a09080", padding:"8px 14px", borderRadius:8, fontSize:12, cursor:"pointer" }}>↺ Restaurar Cotizador y PhotoPrint</button>
+      </div>
+      <CfgGuardar dirty={dirty} saving={saving} onClick={guardar} texto="💾 Guardar accesos"/>
+    </div>
+  );
+}
+
+// ── Configuración con solapas ────────────────────────────────────────────
+function ConfiguracionView({ empresa, setEmpresa, empresaSaved, setEmpresaSaved, pedidos, showToast, catsVersion, cfgVersion }) {
+  const [tab, setTab] = useState("local");
+  const tabs = [
+    ["local",      "🏪 Local"],
+    ["categorias", "🏷️ Categorías"],
+    ["mensajes",   "💬 Mensajes y documentos"],
+    ["pagos",      "💳 Ventas"],
+    ["menu",       "🔗 Menú"],
+  ];
+  return (
+    <div>
+      <div style={{ display:"flex", gap:8, marginBottom:20, flexWrap:"wrap" }}>
+        {tabs.map(([id, l]) => (
+          <button key={id} onClick={()=>setTab(id)}
+            style={{ padding:"9px 18px", borderRadius:20, fontSize:13, fontWeight:700, cursor:"pointer", border:"none", fontFamily:"'DM Sans',sans-serif",
+              background:tab===id?"#e65100":"#fff", color:tab===id?"#fff":"#4a5568",
+              boxShadow:tab===id?"0 3px 12px rgba(230,81,0,.25)":"0 2px 8px rgba(230,81,0,.07)" }}>{l}</button>
+        ))}
+      </div>
+      {tab==="local"      && <ConfigView empresa={empresa} setEmpresa={setEmpresa} empresaSaved={empresaSaved} setEmpresaSaved={setEmpresaSaved}/>}
+      {tab==="categorias" && <CategoriasEditor key={catsVersion} pedidos={pedidos} showToast={showToast}/>}
+      {tab==="mensajes"   && <MensajesConfig  key={cfgVersion} showToast={showToast}/>}
+      {tab==="pagos"      && <MetodosPagoConfig key={cfgVersion} showToast={showToast}/>}
+      {tab==="menu"       && <AccesosConfig   key={cfgVersion} showToast={showToast}/>}
+    </div>
+  );
+}
+
+// ── Componente: Editor de categorías ─────────────────────────────────────
+function CategoriasEditor({ pedidos, showToast }) {
+  const inicial = () => CATEGORIAS.map(n => ({ nombre:n, nombreOriginal:n, icono:CATEGORIA_ICON[n], ...CATEGORIA_COLOR[n] }));
+  const [lista, setLista]       = useState(inicial);
+  const [nuevoNombre, setNuevoNombre] = useState("");
+  const [nuevoIcono, setNuevoIcono]   = useState("📦");
+  const [paletaAbierta, setPaletaAbierta] = useState(null);
+  const [saving, setSaving]     = useState(false);
+  const [dirty, setDirty]       = useState(false);
+
+  const cuentaPedidos = (nombre) => pedidos.filter(p => p.categoria === nombre).length;
+  const upd = (i, campos) => { setLista(l => l.map((x,j) => j===i ? { ...x, ...campos } : x)); setDirty(true); };
+  const mover = (i, d) => {
+    const j = i + d; if (j < 0 || j >= lista.length) return;
+    setLista(l => { const a=[...l]; [a[i],a[j]]=[a[j],a[i]]; return a; }); setDirty(true);
+  };
+  const quitar = (i) => {
+    const x = lista[i]; const n = cuentaPedidos(x.nombreOriginal||x.nombre);
+    if (!window.confirm(n
+      ? `"${x.nombre}" tiene ${n} pedido${n!==1?"s":""}. Los pedidos no se borran: siguen apareciendo con su categoría, pero ya no vas a poder elegirla para pedidos nuevos. ¿Continuar?`
+      : `¿Eliminar la categoría "${x.nombre}"?`)) return;
+    setLista(l => l.filter((_,j) => j!==i)); setDirty(true);
+  };
+  const agregar = () => {
+    const n = nuevoNombre.trim();
+    if (!n) return;
+    if (lista.some(x => x.nombre.toLowerCase() === n.toLowerCase())) { showToast("Esa categoría ya existe","error"); return; }
+    const col = PALETA_CATEGORIAS[lista.length % PALETA_CATEGORIAS.length];
+    setLista(l => [...l, { nombre:n, nombreOriginal:null, icono:nuevoIcono||"📦", ...col }]);
+    setNuevoNombre(""); setNuevoIcono("📦"); setDirty(true);
+  };
+
+  const guardar = async () => {
+    const limpia = lista.map(x => ({ ...x, nombre:x.nombre.trim() })).filter(x => x.nombre);
+    const nombres = limpia.map(x => x.nombre.toLowerCase());
+    if (nombres.length !== new Set(nombres).size) { showToast("Hay dos categorías con el mismo nombre","error"); return; }
+    if (!limpia.length) { showToast("Tiene que haber al menos una categoría","error"); return; }
+
+    // Renombradas: ofrecer actualizar los pedidos que ya la usan
+    const renombradas = limpia.filter(x => x.nombreOriginal && x.nombreOriginal !== x.nombre && cuentaPedidos(x.nombreOriginal) > 0);
+    let actualizarPedidos = false;
+    if (renombradas.length) {
+      const detalle = renombradas.map(x => `• ${x.nombreOriginal} → ${x.nombre} (${cuentaPedidos(x.nombreOriginal)} pedidos)`).join("\n");
+      actualizarPedidos = window.confirm(`Renombraste categorías que ya tienen pedidos:\n${detalle}\n\n¿Actualizo también esos pedidos al nombre nuevo?`);
+    }
+
+    setSaving(true);
+    try {
+      await setDoc(doc(db, "config", "categorias"), {
+        lista: limpia.map(({ nombre, icono, bg, text, accent }) => ({ nombre, icono, bg, text, accent })),
+        actualizadoEn: new Date().toISOString(),
+      });
+      if (actualizarPedidos) {
+        for (const r of renombradas) {
+          for (const p of pedidos.filter(p => p.categoria === r.nombreOriginal)) {
+            await updateDoc(doc(db, "pedidos", p.fireId), { categoria: r.nombre });
+          }
+        }
+      }
+      setDirty(false);
+      showToast("Categorías guardadas ✅");
+    } catch(e) {
+      console.error(e);
+      showToast("Error al guardar las categorías","error");
+    }
+    setSaving(false);
+  };
+
+  const restaurar = () => {
+    if (!window.confirm("¿Volver a las categorías originales? (no afecta los pedidos)")) return;
+    setLista(CATEGORIAS_DEFAULT.map(x => ({ ...x, nombreOriginal:x.nombre }))); setDirty(true);
+  };
+
+  const inp = { padding:"8px 10px", borderRadius:8, border:"1.5px solid #f0d5c0", fontSize:14, fontFamily:"'DM Sans',sans-serif", outline:"none", boxSizing:"border-box" };
+
+  return (
+    <div style={{ background:"#fff", borderRadius:14, boxShadow:"0 2px 14px rgba(230,81,0,.07)", padding:"28px 32px" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap", marginBottom:6 }}>
+        <div>
+          <div style={{ fontSize:20, fontWeight:700, color:"#1a2340" }}>🏷️ Categorías de pedidos</div>
+          <div style={{ fontSize:13, color:"#a09080", marginTop:4 }}>Se usan en Pedidos, Calendario, Presupuestos y en las órdenes de trabajo. El orden de esta lista es el orden en que aparecen.</div>
+        </div>
+        <button onClick={restaurar} style={{ background:"transparent", border:"1.5px solid #f0d5c0", color:"#a09080", padding:"7px 14px", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" }}>↺ Restaurar originales</button>
+      </div>
+
+      <div style={{ display:"flex", flexDirection:"column", gap:8, margin:"18px 0" }}>
+        {lista.map((x, i) => {
+          const n = x.nombreOriginal ? cuentaPedidos(x.nombreOriginal) : 0;
+          return (
+            <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:10, background:x.bg, border:`1.5px solid ${x.accent}40`, flexWrap:"wrap", position:"relative" }}>
+              <div style={{ display:"flex", flexDirection:"column" }}>
+                <button onClick={()=>mover(i,-1)} disabled={i===0} style={{ background:"transparent", border:"none", cursor:i===0?"default":"pointer", color:i===0?"#ccc":x.text, fontSize:11, lineHeight:1, padding:"1px 4px" }}>▲</button>
+                <button onClick={()=>mover(i,1)} disabled={i===lista.length-1} style={{ background:"transparent", border:"none", cursor:i===lista.length-1?"default":"pointer", color:i===lista.length-1?"#ccc":x.text, fontSize:11, lineHeight:1, padding:"1px 4px" }}>▼</button>
+              </div>
+              <input value={x.icono} onChange={e=>upd(i,{ icono:e.target.value })} maxLength={4} title="Ícono (podés pegar un emoji)"
+                style={{ ...inp, width:46, textAlign:"center", fontSize:18, padding:"5px 4px", background:"#fff" }}/>
+              <input value={x.nombre} onChange={e=>upd(i,{ nombre:e.target.value })}
+                style={{ ...inp, flex:1, minWidth:140, fontWeight:700, color:x.text, background:"#fff" }}/>
+              {n > 0 && <span style={{ fontSize:11, color:x.text, opacity:.8, whiteSpace:"nowrap" }}>{n} pedido{n!==1?"s":""}</span>}
+              <button onClick={()=>setPaletaAbierta(paletaAbierta===i?null:i)} title="Cambiar color"
+                style={{ width:30, height:30, borderRadius:8, border:`2px solid ${x.text}`, background:x.accent, cursor:"pointer", flexShrink:0 }}/>
+              <button onClick={()=>quitar(i)} title="Eliminar"
+                style={{ background:"#fff", border:"none", color:"#c62828", width:30, height:30, borderRadius:8, cursor:"pointer", fontSize:14, flexShrink:0 }}>🗑</button>
+              {paletaAbierta===i && (
+                <div style={{ width:"100%", display:"flex", gap:6, flexWrap:"wrap", paddingTop:6 }}>
+                  {PALETA_CATEGORIAS.map((col, k) => (
+                    <button key={k} onClick={()=>{ upd(i, col); setPaletaAbierta(null); }}
+                      style={{ width:28, height:28, borderRadius:7, cursor:"pointer", background:col.bg,
+                        border:`3px solid ${x.accent===col.accent && x.bg===col.bg ? col.text : col.accent}` }}/>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display:"flex", gap:8, padding:"12px", border:"1.5px dashed #f0d5c0", borderRadius:10, marginBottom:20 }}>
+        <input value={nuevoIcono} onChange={e=>setNuevoIcono(e.target.value)} maxLength={4} style={{ ...inp, width:52, textAlign:"center", fontSize:18 }}/>
+        <input value={nuevoNombre} onChange={e=>setNuevoNombre(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter") agregar(); }}
+          placeholder="Nueva categoría (ej: Banderas)" style={{ ...inp, flex:1 }}/>
+        <button onClick={agregar} style={{ background:"#1a2340", color:"#fff", border:"none", padding:"8px 18px", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>+ Agregar</button>
+      </div>
+
+      <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"center", gap:12 }}>
+        {dirty && <span style={{ fontSize:12, color:"#e65100", fontWeight:600 }}>Hay cambios sin guardar</span>}
+        <button onClick={guardar} disabled={saving||!dirty}
+          style={{ background:dirty?"#e65100":"#f0d5c0", color:"#fff", border:"none", padding:"11px 28px", borderRadius:8, fontSize:15, fontWeight:600, cursor:dirty?"pointer":"default" }}>
+          {saving ? "Guardando..." : "💾 Guardar categorías"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ConfigView({ empresa, setEmpresa, empresaSaved, setEmpresaSaved }) {
   const [form, setForm]       = useState({ ...empresa });
   const [preview, setPreview] = useState(empresa.logo || "");
@@ -3617,7 +4138,7 @@ function buildPresupuestoHTML(datos, empresa) {
   const fecha = base.toLocaleDateString("es-AR");
   const hora  = datos.fecha ? "" : new Date().toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
   const nombre = empresa?.nombre || "Mafalda Gráfica";
-  const diasValidez = parseInt(datos.validezDias)||7;
+  const diasValidez = parseInt(datos.validezDias)||parseInt(APP_CFG.validezPresupuesto)||7;
   const validez = new Date(base.getTime() + diasValidez*24*60*60*1000).toLocaleDateString("es-AR");
   const rows = datos.items.map(it => `
     <tr>
@@ -3685,7 +4206,8 @@ function buildPresupuestoHTML(datos, empresa) {
   <div class="total-val">$${parseFloat(datos.total).toLocaleString("es-AR")}</div>
 </div>
 ${datos.observaciones?`<div style="font-size:12px;color:#4a5568;margin-bottom:12px;padding:10px 12px;border:1px dashed #d0d0d0;border-radius:6px"><b>Observaciones:</b> ${datos.observaciones}</div>`:""}
-<div class="validez">⏳ Este presupuesto tiene validez de ${diasValidez} día${diasValidez!==1?"s":""} · Sujeto a cambios de precio</div>
+<div class="validez">⏳ Este presupuesto tiene validez de ${diasValidez} día${diasValidez!==1?"s":""}${APP_CFG.condicionesPresupuesto?` · ${APP_CFG.condicionesPresupuesto}`:""}</div>
+${APP_CFG.piePresupuesto?`<div style="font-size:11px;color:#4a5568;margin:10px 0;white-space:pre-wrap">${APP_CFG.piePresupuesto}</div>`:""}
 <div class="foot"><span>${nombre}</span><span>${num} · ${fecha}</span></div>
 <script>window.onload=()=>window.print();</script>
 </body></html>`;
@@ -4932,12 +5454,12 @@ function VentasView({ setView, showToast, clientes, empresa, configCargada }) {
             </div>
             <div style={{ fontWeight:600, fontSize:13, color:"#4a5568", marginBottom:12 }}>Método de pago:</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:20 }}>
-              {["Efectivo","Transferencia","Tarjeta de Crédito","Cuenta Corriente"].map(m=>(
+              {getMetodosPago().map(x=>x.nombre).map(m=>(
                 <button key={m} onClick={()=>handleConvertirVenta(convirtiendo, m)}
                   style={{ padding:"12px 8px", borderRadius:8, border:"1.5px solid #f0d5c0", background:"#fff", fontSize:12, fontWeight:600, cursor:"pointer", color:"#1a2340", transition:"all .15s" }}
                   onMouseOver={e=>{e.currentTarget.style.background="#fff8f5";e.currentTarget.style.borderColor="#e65100";}}
                   onMouseOut={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#f0d5c0";}}>
-                  {m==="Efectivo"?"💵 Efectivo":m==="Transferencia"?"📲 Transferencia":m==="Tarjeta de Crédito"?"💳 Tarjeta":"📒 Cta. Corriente"}
+                  {labelMetodo(m)}
                 </button>
               ))}
             </div>
@@ -5108,7 +5630,7 @@ function NuevaVentaView({ setView, showToast, clientes, empresa, configCargada }
         clienteId:     clienteSelId||null,
         clienteNombre: clienteNombre||"Consumidor Final",
         metodoPago,
-        validezDias:   7,
+        validezDias:   parseInt(APP_CFG.validezPresupuesto)||7,
         items,
         total,
         creadoEn:      new Date().toISOString(),
@@ -5296,11 +5818,11 @@ function NuevaVentaView({ setView, showToast, clientes, empresa, configCargada }
           <div style={{ background:"#fff", borderRadius:14, boxShadow:"0 2px 14px rgba(230,81,0,.07)", padding:"18px 20px" }}>
             <div style={{ fontWeight:700, fontSize:14, color:"#1a2340", marginBottom:12 }}>💳 Método de Pago</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-              {["Efectivo","Transferencia","Tarjeta de Crédito","Cuenta Corriente"].map(m=>(
+              {getMetodosPago().map(x=>x.nombre).map(m=>(
                 <button key={m} onClick={()=>setMetodoPago(m)}
                   style={{ padding:"10px 8px", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", border:`2px solid ${metodoPago===m?"#e65100":"#f0d5c0"}`,
                     background:metodoPago===m?"#e65100":"#fff", color:metodoPago===m?"#fff":"#4a5568", transition:"all .15s" }}>
-                  {m==="Efectivo"?"💵 Efectivo":m==="Transferencia"?"📲 Transferencia":m==="Tarjeta de Crédito"?"💳 Tarjeta":"📒 Cta. Corriente"}
+                  {labelMetodo(m)}
                 </button>
               ))}
             </div>
@@ -5409,7 +5931,7 @@ const presNum = (p) => `P-${String(p.numero||0).padStart(5,"0")}`;
 const presVence = (p) => {
   if (!p.fecha) return null;
   const d = new Date(p.fecha+"T12:00:00");
-  d.setDate(d.getDate() + (parseInt(p.validezDias)||7));
+  d.setDate(d.getDate() + (parseInt(p.validezDias)||parseInt(APP_CFG.validezPresupuesto)||7));
   return d.toISOString().split("T")[0];
 };
 
@@ -5565,7 +6087,7 @@ function PresupuestoEditor({ presupuesto, clientes, empresa, showToast, onSaved,
   const [clienteSelId, setClienteSelId] = useState(presupuesto?.clienteId || null);
   const [clienteNombre, setClienteNombre] = useState(presupuesto?.clienteNombre && presupuesto.clienteNombre!=="Consumidor Final" ? presupuesto.clienteNombre : "");
   const [metodoPago, setMetodoPago]     = useState(presupuesto?.metodoPago || "Efectivo");
-  const [validezDias, setValidezDias]   = useState(presupuesto?.validezDias || 7);
+  const [validezDias, setValidezDias]   = useState(presupuesto?.validezDias || APP_CFG.validezPresupuesto || 7);
   const [tiempoEntrega, setTiempoEntrega] = useState(presupuesto?.tiempoEntrega || "");
   const [observaciones, setObservaciones] = useState(presupuesto?.observaciones || "");
   const [itemLibreNombre, setItemLibreNombre] = useState("");
@@ -5747,7 +6269,7 @@ function PresupuestoEditor({ presupuesto, clientes, empresa, showToast, onSaved,
           </div>
           <label style={lbl}>Forma de pago</label>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
-            {[["Efectivo","💵 Efectivo"],["Transferencia","📲 Transferencia"],["Tarjeta de Crédito","💳 Tarjeta"],["Cuenta Corriente","📒 Cta. Corriente"]].map(([m,l]) => (
+            {getMetodosPago().map(x=>[x.nombre, labelMetodo(x.nombre)]).map(([m,l]) => (
               <button key={m} onClick={()=>setMetodoPago(m)}
                 style={{ padding:"9px 8px", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", border:`2px solid ${metodoPago===m?"#e65100":"#f0d5c0"}`,
                   background:metodoPago===m?"#e65100":"#fff", color:metodoPago===m?"#fff":"#4a5568" }}>{l}</button>
@@ -7573,12 +8095,10 @@ function FinanzasView({ pedidos, clientes, desbloqueado, setDesbloqueado, showTo
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:24 }}>
             <div style={{ background:"#fff", borderRadius:14, boxShadow:"0 2px 14px rgba(230,81,0,.07)", padding:"20px 24px" }}>
               <div style={{ fontWeight:700, fontSize:15, color:"#1a2340", marginBottom:16 }}>💳 Ventas por método de pago</div>
-              {[
-                {label:"Efectivo",       value:totalEfectivo, color:"#2e7d32", bg:"#e8f5e9"},
-                {label:"Transferencia",  value:totalTransfer, color:"#1565c0", bg:"#e3f2fd"},
-                {label:"Tarjeta",        value:totalTarjeta,  color:"#6a1b9a", bg:"#f3e5f5"},
-                {label:"Cta. Corriente", value:totalCtaCte,   color:"#e65100", bg:"#fff3e0"},
-              ].map((m,i)=>(
+              {metodosConHistorial(ventas).map(m => ({ ...m,
+                  value: ventasFilt.filter(v=>v.metodoPago===m.nombre).reduce((s,v)=>s+parseFloat(v.total||0),0) }))
+                .filter(m => m.value>0 || getMetodosPago().some(x=>x.nombre===m.nombre))
+                .map((m,i)=>(
                 <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid #fef0e8" }}>
                   <span style={{ background:m.bg, color:m.color, padding:"3px 10px", borderRadius:20, fontSize:12, fontWeight:600 }}>{m.label}</span>
                   <span style={{ fontWeight:700, color:m.color, fontSize:15 }}>${m.value.toLocaleString("es-AR")}</span>
@@ -7593,10 +8113,9 @@ function FinanzasView({ pedidos, clientes, desbloqueado, setDesbloqueado, showTo
               <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
                 {ultimos7.slice().reverse().map((d,i)=>{
                   const esHoy = d.fecha === hoy;
-                  const ef  = ventas.filter(v=>v.fecha===d.fecha&&v.metodoPago==="Efectivo").reduce((s,v)=>s+parseFloat(v.total||0),0);
-                  const tr  = ventas.filter(v=>v.fecha===d.fecha&&v.metodoPago==="Transferencia").reduce((s,v)=>s+parseFloat(v.total||0),0);
-                  const tj  = ventas.filter(v=>v.fecha===d.fecha&&v.metodoPago==="Tarjeta de Crédito").reduce((s,v)=>s+parseFloat(v.total||0),0);
-                  const cc  = ventas.filter(v=>v.fecha===d.fecha&&v.metodoPago==="Cuenta Corriente").reduce((s,v)=>s+parseFloat(v.total||0),0);
+                  const porMetodo = metodosConHistorial(ventas).map(m => ({ ...m,
+                    value: ventas.filter(v=>v.fecha===d.fecha&&v.metodoPago===m.nombre).reduce((s,v)=>s+parseFloat(v.total||0),0) }))
+                    .filter(m => m.value>0);
                   return (
                     <div key={d.fecha} style={{ borderBottom:i<6?"1px solid #fef0e8":"none", padding:"10px 0" }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: d.total>0?6:0 }}>
@@ -7610,10 +8129,9 @@ function FinanzasView({ pedidos, clientes, desbloqueado, setDesbloqueado, showTo
                       </div>
                       {d.total>0 && (
                         <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                          {ef>0 && <span style={{ background:"#e8f5e9", color:"#2e7d32", padding:"2px 8px", borderRadius:20, fontSize:10, fontWeight:600 }}>💵 ${ef.toLocaleString("es-AR")}</span>}
-                          {tr>0 && <span style={{ background:"#e3f2fd", color:"#1565c0", padding:"2px 8px", borderRadius:20, fontSize:10, fontWeight:600 }}>📲 ${tr.toLocaleString("es-AR")}</span>}
-                          {tj>0 && <span style={{ background:"#f3e5f5", color:"#6a1b9a", padding:"2px 8px", borderRadius:20, fontSize:10, fontWeight:600 }}>💳 ${tj.toLocaleString("es-AR")}</span>}
-                          {cc>0 && <span style={{ background:"#fff3e0", color:"#e65100", padding:"2px 8px", borderRadius:20, fontSize:10, fontWeight:600 }}>📒 ${cc.toLocaleString("es-AR")}</span>}
+                          {porMetodo.map(m => (
+                            <span key={m.nombre} style={{ background:m.bg, color:m.color, padding:"2px 8px", borderRadius:20, fontSize:10, fontWeight:600 }}>{m.label.split(" ")[0]} ${m.value.toLocaleString("es-AR")}</span>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -8083,13 +8601,13 @@ function EntregaModal({ pedido, onConfirmar, onClose }) {
         <div style={{ marginBottom:22 }}>
           <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#4a5568", marginBottom:10 }}>Método de pago del saldo:</label>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            {["Efectivo","Transferencia","Tarjeta de Crédito","Cuenta Corriente"].map(m=>(
+            {getMetodosPago().map(x=>x.nombre).map(m=>(
               <button key={m} onClick={()=>setMetodoPago(m)}
                 style={{ padding:"10px 8px", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer",
                   border:`2px solid ${metodoPago===m?"#e65100":"#f0d5c0"}`,
                   background:metodoPago===m?"#e65100":"#fff",
                   color:metodoPago===m?"#fff":"#4a5568", transition:"all .15s" }}>
-                {m==="Efectivo"?"💵 Efectivo":m==="Transferencia"?"📲 Transferencia":m==="Tarjeta de Crédito"?"💳 Tarjeta":"📒 Cta. Corriente"}
+                {labelMetodo(m)}
               </button>
             ))}
           </div>
@@ -8152,7 +8670,7 @@ function EntregaMultipleModal({ pedidos, onConfirmar, onClose }) {
 
         <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#4a5568", marginBottom:10 }}>Método de pago (se aplica a todos):</label>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:metodoPago==="Cuenta Corriente"&&sinCliente?10:20 }}>
-          {[["Efectivo","💵 Efectivo"],["Transferencia","📲 Transferencia"],["Tarjeta de Crédito","💳 Tarjeta"],["Cuenta Corriente","📒 Cta. Corriente"]].map(([m,l])=>(
+          {getMetodosPago().map(x=>[x.nombre, labelMetodo(x.nombre)]).map(([m,l])=>(
             <button key={m} onClick={()=>setMetodoPago(m)}
               style={{ padding:"10px 8px", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer",
                 border:`2px solid ${metodoPago===m?"#e65100":"#f0d5c0"}`, background:metodoPago===m?"#e65100":"#fff", color:metodoPago===m?"#fff":"#4a5568" }}>{l}</button>
@@ -8183,30 +8701,21 @@ function EntregaMultipleModal({ pedidos, onConfirmar, onClose }) {
 // ── Componente: Modal Mensaje WhatsApp ───────────────────────────────────
 function MsgModal({ pedido, copied, setCopied, onClose }) {
   const p    = pedido;
-  const tot  = parseFloat(p.precio||0).toLocaleString("es-AR");
-  const sal  = (parseFloat(p.precio||0) - parseFloat(p.seña||0)).toLocaleString("es-AR");
-  const nroOT = p.nroOT ? `N° ${String(p.nroOT).padStart(4,"0")} - ` : "";
-  const nombre = p.cliente?.split(" ")[0] || p.cliente || "cliente"; // primer nombre
-  const saldoNum = parseFloat(p.precio||0) - parseFloat(p.seña||0);
-
-  const msg = `¡Hola ${nombre}! 👋\nTu pedido *${nroOT}${p.nombre}* ya está listo para retirar 🎉${
-    saldoNum > 0
-      ? `\nEl monto total es $${tot} y resta abonar *$${sal}*.`
-      : p.precio ? `\nEl total abonado es $${tot}. ¡Todo pago!` : ""
-  }\n¡Muchas gracias por elegirnos! 🙌`;
+  const msg  = armarMensajeListo(p); // plantilla editable en Configuración → Mensajes
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(msg).then(() => {
+    navigator.clipboard.writeText(document.getElementById("msg-cliente-textarea")?.value || msg).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     });
   };
 
   const handleWhatsApp = () => {
-    const tel = (p.telefono||"").replace(/\D/g,"");
+    const tel = telWhatsapp(p.telefono);
+    const textoFinal = document.getElementById("msg-cliente-textarea")?.value || msg;
     const url = tel
-      ? `https://wa.me/54${tel}?text=${encodeURIComponent(msg)}`
-      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+      ? `https://wa.me/${tel}?text=${encodeURIComponent(textoFinal)}`
+      : `https://wa.me/?text=${encodeURIComponent(textoFinal)}`;
     window.open(url, "_blank");
   };
 
@@ -8337,6 +8846,26 @@ export default function App() {
   const [busqGlobalOpen, setBusqGlobalOpen]       = useState(false);
   const [planillaFlotante, setPlanillaFlotante]   = useState(false);
   const [empleados, setEmpleados]                 = useState([]);
+  const [catsVersion, setCatsVersion]             = useState(0);
+  const [cfgVersion, setCfgVersion]               = useState(0);
+
+  // ── Firebase: configuración general (mensajes, documentos, pagos, menú) ──
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "config", "app"), snap => {
+      aplicarAppCfg(snap.exists() ? snap.data() : null);
+      setCfgVersion(v => v + 1);
+    });
+    return () => unsub();
+  }, []);
+
+  // ── Firebase: categorías configurables ──
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "config", "categorias"), snap => {
+      aplicarCategorias(snap.exists() ? snap.data().lista : null);
+      setCatsVersion(v => v + 1);
+    });
+    return () => unsub();
+  }, []);
 
   // ── Firebase: verificar sesión ──
   useEffect(() => {
@@ -8400,13 +8929,15 @@ export default function App() {
 
   const grouped = useMemo(() => {
     const g = {};
-    CATEGORIAS.forEach(cat => {
-      const items = filtered.filter(p => p.categoria === cat)
+    // Categorías configuradas primero, y al final las que ya no existen pero tienen pedidos
+    const extra = [...new Set(filtered.map(p => p.categoria || "Sin categoría"))].filter(c => !CATEGORIAS.includes(c));
+    [...CATEGORIAS, ...extra].forEach(cat => {
+      const items = filtered.filter(p => (p.categoria || "Sin categoría") === cat)
         .sort((a, b) => (!a.fechaEntrega ? 1 : !b.fechaEntrega ? -1 : a.fechaEntrega.localeCompare(b.fechaEntrega)));
       if (items.length) g[cat] = items;
     });
     return g;
-  }, [filtered]);
+  }, [filtered, catsVersion]);
 
   const stats = useMemo(() => ({
     total:     pedidos.filter(p => p.estado !== "Entregado" && p.estado !== "Listo").length,
@@ -8739,14 +9270,12 @@ export default function App() {
               <span className="sidebar-icon">📋</span>
               <span className="sidebar-label">Presupuestos</span>
             </button>
-            <button className="sidebar-item" onClick={()=>window.open("https://mafalda-cotizador.vercel.app","_blank")}>
-              <span className="sidebar-icon">💲</span>
-              <span className="sidebar-label">Cotizador</span>
-            </button>
-            <button className="sidebar-item" onClick={()=>window.open("https://mafalda-photoprint.vercel.app","_blank")}>
-              <span className="sidebar-icon">📷</span>
-              <span className="sidebar-label">PhotoPrint</span>
-            </button>
+            {(APP_CFG.accesos||[]).filter(a => a && a.url).map((a, i) => (
+              <button key={"acc"+i} className="sidebar-item" onClick={()=>window.open(a.url,"_blank")} title={a.url}>
+                <span className="sidebar-icon">{a.icono||"🔗"}</span>
+                <span className="sidebar-label">{a.nombre||a.url}</span>
+              </button>
+            ))}
             <button className={`sidebar-item ${(view==="insumos"||view==="nuevoInsumo"||view==="editarInsumo")?"act":""}` + ""} onClick={()=>{ setView("insumos"); }}>
               <span className="sidebar-icon">🏷️</span>
               <span className="sidebar-label">Servicios y Productos</span>
@@ -8825,7 +9354,7 @@ export default function App() {
 
             {/* Botones contextuales en topbar */}
             {(view==="lista"||view==="formulario"||view==="detalle") && (
-              <button className="ctx-btn" onClick={()=>{ setFormData({ ...EMPTY_FORM, fechaPedido: new Date().toLocaleDateString("sv-SE") }); setEditingId(null); setErrors({}); setSelectedClienteId(null); setClienteSearch(""); setView("formulario"); }}>
+              <button className="ctx-btn" onClick={()=>{ setFormData({ ...EMPTY_FORM, categoria: CATEGORIAS[0]||"", fechaPedido: new Date().toLocaleDateString("sv-SE") }); setEditingId(null); setErrors({}); setSelectedClienteId(null); setClienteSearch(""); setView("formulario"); }}>
                 + Nuevo Pedido
               </button>
             )}
@@ -9089,6 +9618,9 @@ export default function App() {
                     color: formData.categoria ? (CATEGORIA_COLOR[formData.categoria]?.text||"#1a2340") : "#a09080",
                     fontWeight: formData.categoria ? 700 : 400 }}>
                   <option value="">— Seleccioná una categoría —</option>
+                  {formData.categoria && !CATEGORIAS.includes(formData.categoria) && (
+                    <option value={formData.categoria}>{formData.categoria} (ya no existe)</option>
+                  )}
                   {CATEGORIAS.map(cat=>(
                     <option key={cat} value={cat}>{CATEGORIA_ICON[cat]} {cat}</option>
                   ))}
@@ -9488,11 +10020,15 @@ export default function App() {
 
         {/* ── CONFIGURACIÓN ── */}
         {view==="config" && (
-          <ConfigView
+          <ConfiguracionView
             empresa={empresa}
             setEmpresa={setEmpresa}
             empresaSaved={empresaSaved}
             setEmpresaSaved={setEmpresaSaved}
+            pedidos={pedidos}
+            showToast={showToast}
+            catsVersion={catsVersion}
+            cfgVersion={cfgVersion}
           />
         )}
       </div>
