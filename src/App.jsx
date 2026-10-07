@@ -18,7 +18,7 @@ const PALETA_CATEGORIAS = [
   { bg:"#e0f2f1", text:"#004d40", accent:"#009688" }, // verde agua
   { bg:"#f3e5f5", text:"#4a148c", accent:"#9c27b0" }, // violeta
   { bg:"#fff8e1", text:"#f57f17", accent:"#ffc107" }, // amarillo
-  { bg:"#e8f5e9", text:"#1b5e20", accent:"#4caf50" }, // verde
+  { bg:"#e8f5e9", text:"#1b5e20", accent:"#4caf50" }, // verdeA
   { bg:"#efebe9", text:"#3e2723", accent:"#795548" }, // marrón
   { bg:"#e3f2fd", text:"#0d47a1", accent:"#1976d2" }, // azul
   { bg:"#ffebee", text:"#b71c1c", accent:"#e53935" }, // rojo
@@ -120,6 +120,70 @@ function aplicarTema(pri) {
 }
 // Arranca con el último color usado en este dispositivo, así no "parpadea" naranja al abrir
 aplicarTema((() => { try { return localStorage.getItem("app_tema"); } catch(e) { return null; } })() || "#e65100");
+
+// ── Marca del negocio (nombre y logo) ─────────────────────────────────────
+// Antes de iniciar sesión no se puede leer Firebase, así que cada dispositivo
+// recuerda el último nombre/logo para la pantalla de carga, el login y la pestaña.
+function marcaGuardada() {
+  try { return JSON.parse(localStorage.getItem("app_marca") || "null") || {}; } catch(e) { return {}; }
+}
+let _faviconOriginal = null;
+function ponerFavicon(href) {
+  if (typeof document === "undefined") return;
+  let links = [...document.querySelectorAll('link[rel~="icon"]')];
+  if (_faviconOriginal === null) _faviconOriginal = links[0]?.getAttribute("href") || "/favicon.ico";
+  if (!links.length) { const l = document.createElement("link"); l.rel = "icon"; document.head.appendChild(l); links = [l]; }
+  links.forEach(l => { l.setAttribute("href", href || _faviconOriginal); if (href) l.removeAttribute("type"); });
+}
+// Pasa el logo a un ícono cuadrado (si no, los logos anchos se ven aplastados en la pestaña)
+function logoACuadrado(src) {
+  return new Promise(resolve => {
+    if (!src) return resolve("");
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const s = 64, cv = document.createElement("canvas"); cv.width = cv.height = s;
+        const k = Math.min(s / img.width, s / img.height);
+        const w = img.width * k, h = img.height * k;
+        cv.getContext("2d").drawImage(img, (s - w) / 2, (s - h) / 2, w, h);
+        resolve(cv.toDataURL("image/png"));
+      } catch(e) { resolve(src); }
+    };
+    img.onerror = () => resolve("");
+    img.src = src;
+  });
+}
+async function aplicarMarca(empresa) {
+  const nombre = (empresa?.nombre || "").trim();
+  const logo   = empresa?.logo || "";
+  if (typeof document !== "undefined" && nombre) document.title = nombre;
+  const icono = await logoACuadrado(logo);
+  ponerFavicon(icono);
+  try { localStorage.setItem("app_marca", JSON.stringify({ nombre, logo, icono })); }
+  catch(e) { try { localStorage.setItem("app_marca", JSON.stringify({ nombre, icono })); } catch(e2) {} }
+}
+// Al abrir: aplicar lo último recordado en este dispositivo
+(() => {
+  const m = marcaGuardada();
+  if (typeof document !== "undefined") {
+    if (m.nombre) document.title = m.nombre;
+    if (m.icono) ponerFavicon(m.icono);
+  }
+})();
+
+// Logo + nombre para pantallas de carga y login
+function MarcaPantalla({ tamaño = 28, mb = 12 }) {
+  const m = marcaGuardada();
+  return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:12, marginBottom:mb }}>
+      {m.logo && <img src={m.logo} alt="" style={{ maxHeight:tamaño*2.6, maxWidth:220, objectFit:"contain" }}/>}
+      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:tamaño, fontWeight:700, color:"var(--c-pri)", textAlign:"center" }}>
+        {m.nombre || "Sistema de gestión"}
+      </div>
+    </div>
+  );
+}
 
 // ── Configuración general de la app (config/app en Firebase) ─────────────
 const APP_CFG_DEFAULT = {
@@ -229,7 +293,7 @@ const EMPTY_CLIENTE = {
 };
 
 const EMPTY_EMPRESA = {
-  nombre: "Mafalda Gráfica", titular: "", cuit: "",
+  nombre: "", titular: "", cuit: "",
   direccion: "", telefono: "", logo: ""
 };
 
@@ -247,7 +311,7 @@ function buildOrdenHTML(p, empresa = EMPTY_EMPRESA) {
   const fecha = now.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
   const hora  = now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
   const num   = p.nroOT ? `OT-${String(p.nroOT).padStart(4, "0")}` : p.id ? `OT-${String(p.id).padStart(4, "0")}` : `OT-????`;
-  const nombre = empresa.nombre || "Mafalda Gráfica";
+  const nombre = empresa.nombre || "";
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -4154,7 +4218,7 @@ function LoginScreen() {
       <div style={{ background:"#fff", borderRadius:20, padding:"48px 44px", width:"100%", maxWidth:420, boxShadow:"0 24px 60px rgba(0,0,0,.25)" }}>
         {/* Logo / título */}
         <div style={{ textAlign:"center", marginBottom:36 }}>
-          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:32, fontWeight:700, color:"var(--c-pri)", marginBottom:6 }}>Mafalda Gráfica</div>
+          <MarcaPantalla tamaño={32} mb={6}/>
           <div style={{ fontSize:14, color:"#a09080" }}>Sistema de gestión de pedidos</div>
         </div>
 
@@ -4205,7 +4269,7 @@ function buildComprobanteHTML(venta, empresa) {
   const now    = new Date();
   const fecha  = venta.fecha || now.toLocaleDateString("es-AR");
   const hora   = now.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
-  const nombre = empresa?.nombre || "Mafalda Gráfica";
+  const nombre = empresa?.nombre || "";
   const rows   = venta.items.map(it => `
     <tr>
       <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0">${it.cantidad}</td>
@@ -4284,7 +4348,7 @@ function buildPresupuestoHTML(datos, empresa) {
   const base  = datos.fecha ? new Date(datos.fecha+"T12:00:00") : new Date();
   const fecha = base.toLocaleDateString("es-AR");
   const hora  = datos.fecha ? "" : new Date().toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
-  const nombre = empresa?.nombre || "Mafalda Gráfica";
+  const nombre = empresa?.nombre || "";
   const diasValidez = parseInt(datos.validezDias)||parseInt(APP_CFG.validezPresupuesto)||7;
   const validez = new Date(base.getTime() + diasValidez*24*60*60*1000).toLocaleDateString("es-AR");
   const rows = datos.items.map(it => `
@@ -9083,11 +9147,17 @@ export default function App() {
 
   // ── Firebase: cargar configuración de empresa ──
   useEffect(() => {
+    if (!user) return;
     getDoc(doc(db, "config", "empresa")).then(snap => {
       if (snap.exists()) setEmpresa(snap.data());
       setConfigCargada(true);
     }).catch(() => setConfigCargada(true));
-  }, []);
+  }, [user]);
+
+  // Nombre y logo → pestaña del navegador, pantalla de carga y login
+  useEffect(() => {
+    if (configCargada) aplicarMarca(empresa);
+  }, [configCargada, empresa.nombre, empresa.logo]);
 
   const handleLogout = () => signOut(auth);
 
@@ -9294,7 +9364,7 @@ export default function App() {
 
   if (!authChecked) return (
     <div style={{ minHeight:"100vh", background:"var(--c-soft)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"'DM Sans',sans-serif" }}>
-      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:28, fontWeight:700, color:"var(--c-pri)", marginBottom:12 }}>Mafalda Gráfica</div>
+      <MarcaPantalla/>
       <div style={{ fontSize:14, color:"#a09080" }}>Iniciando...</div>
     </div>
   );
@@ -9303,7 +9373,7 @@ export default function App() {
 
   if (loading) return (
     <div style={{ minHeight:"100vh", background:"var(--c-soft)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"'DM Sans',sans-serif" }}>
-      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:28, fontWeight:700, color:"var(--c-pri)", marginBottom:12 }}>Mafalda Gráfica</div>
+      <MarcaPantalla/>
       <div style={{ fontSize:14, color:"#a09080" }}>Cargando pedidos...</div>
     </div>
   );
@@ -9419,7 +9489,7 @@ export default function App() {
               : <span className="sidebar-icon" style={{ fontSize:26 }}>🖨️</span>
             }
             <div className="sidebar-logo-txt">
-              <div className="sidebar-logo-name">{empresa.nombre||"Mafalda"}</div>
+              <div className="sidebar-logo-name">{empresa.nombre||"Mi negocio"}</div>
               <div className="sidebar-logo-sub">Gestión</div>
             </div>
             <button className="sidebar-toggle" onClick={()=>setMenuAbierto(m=>!m)} title={menuAbierto?"Colapsar menú":"Expandir menú"}>
