@@ -18,7 +18,7 @@ const PALETA_CATEGORIAS = [
   { bg:"#e0f2f1", text:"#004d40", accent:"#009688" }, // verde agua
   { bg:"#f3e5f5", text:"#4a148c", accent:"#9c27b0" }, // violeta
   { bg:"#fff8e1", text:"#f57f17", accent:"#ffc107" }, // amarillo
-  { bg:"#e8f5e9", text:"#1b5e20", accent:"#4caf50" }, // verdeA
+  { bg:"#e8f5e9", text:"#1b5e20", accent:"#4caf50" }, // verde
   { bg:"#efebe9", text:"#3e2723", accent:"#795548" }, // marrón
   { bg:"#e3f2fd", text:"#0d47a1", accent:"#1976d2" }, // azul
   { bg:"#ffebee", text:"#b71c1c", accent:"#e53935" }, // rojo
@@ -6753,6 +6753,55 @@ function ModalAgendarVenta({ items, total, clienteNombre, onConfirmar, onClose }
 }
 
 // ── Componente: Insumos ───────────────────────────────────────────────────
+// ── Exportar Servicios y Productos a Excel ───────────────────────────────
+// Usa las mismas columnas que "Importar Excel", así se puede bajar, editar y volver a subir.
+async function exportarExcelProductos(insumos, showToast) {
+  try {
+    const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs");
+    const num = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+    const ordenados = [...insumos].sort((a,b) => (a.categoria||"").localeCompare(b.categoria||"") || (a.nombre||"").localeCompare(b.nombre||""));
+    const filasProd = ordenados.map(i => ({
+      codigo:        i.codigo || "",
+      nombre:        i.nombre || "",
+      categoria:     i.categoria || "",
+      precio_compra: num(i.precioCompra),
+      precio_venta1: num(i.precioVenta),
+      precio_venta2: num(i.precioGremio),
+      stock:         num(i.stock),
+      stock_minimo:  num(i.stockMinimo),
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws1 = XLSX.utils.json_to_sheet(filasProd.length ? filasProd : [{ codigo:"", nombre:"", categoria:"", precio_compra:"", precio_venta1:"", precio_venta2:"", stock:"", stock_minimo:"" }]);
+    ws1["!cols"] = [{wch:12},{wch:42},{wch:18},{wch:14},{wch:14},{wch:14},{wch:8},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, ws1, "Precios final");
+
+    // Materias primas en una segunda hoja
+    const snapMP = await getDocs(collection(db, "materiasPrimas"));
+    const mps = snapMP.docs.map(d => d.data()).sort((a,b) => (a.categoria||"").localeCompare(b.categoria||"") || (a.nombre||"").localeCompare(b.nombre||""));
+    if (mps.length) {
+      const ws2 = XLSX.utils.json_to_sheet(mps.map(m => ({
+        nombre:      m.nombre || "",
+        descripcion: m.descripcion || "",
+        precioCosto: num(m.precioCosto),
+        unidad:      m.unidad || "",
+        categoria:   m.categoria || "",
+        proveedor:   m.proveedor || "",
+        stock:       num(m.stock),
+      })));
+      ws2["!cols"] = [{wch:32},{wch:36},{wch:13},{wch:10},{wch:18},{wch:20},{wch:8}];
+      XLSX.utils.book_append_sheet(wb, ws2, "Materias primas");
+    }
+
+    const negocio = (marcaGuardada().nombre || "productos").replace(/[^\wáéíóúñÁÉÍÓÚÑ ]/g,"").trim().replace(/\s+/g,"_");
+    const fecha   = new Date().toLocaleDateString("sv-SE");
+    XLSX.writeFile(wb, `Productos_${negocio}_${fecha}.xlsx`);
+    showToast(`Excel descargado · ${filasProd.length} producto${filasProd.length!==1?"s":""}${mps.length ? ` y ${mps.length} materia${mps.length!==1?"s":""} prima${mps.length!==1?"s":""}` : ""} ✅`);
+  } catch(e) {
+    console.error(e);
+    showToast("No se pudo generar el Excel", "error");
+  }
+}
+
 function InsumosView({ setView, showToast }) {
   const [insumos, setInsumos]         = useState([]);
   const [busq, setBusq]               = useState("");
@@ -6804,8 +6853,8 @@ function InsumosView({ setView, showToast }) {
         precioVenta:   parseFloat(r.precio_venta1  || r.precio_venta || 0) || 0,
         precioGremio:  parseFloat(r.precio_venta2  || r.precio_gremio || 0) || 0,
         categoria:     String(r.categoria   || "General").trim(),
-        stock:         0,
-        stockMinimo:   0,
+        stock:         parseFloat(r.stock        || 0) || 0,
+        stockMinimo:   parseFloat(r.stock_minimo || 0) || 0,
       }));
     setImportData(parsed);
     setImportModal(true);
@@ -6919,6 +6968,11 @@ function InsumosView({ setView, showToast }) {
             showToast("Todos los insumos fueron eliminados", "error");
           }} style={{ background:"transparent", border:"1.5px solid #ef5350", color:"#ef5350", padding:"9px 16px", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer" }}>
             🗑 Borrar todos
+          </button>
+          <button onClick={() => exportarExcelProductos(insumos, showToast)} disabled={!insumos.length}
+            title="Descarga todos los productos (y las materias primas en otra hoja)"
+            style={{ background:"#fff", border:"1.5px solid #2e7d32", color:"#2e7d32", padding:"9px 18px", borderRadius:8, fontSize:13, fontWeight:700, cursor:insumos.length?"pointer":"default", opacity:insumos.length?1:.5 }}>
+            📤 Descargar Excel
           </button>
           <label style={{ background:"#fff", border:"1.5px solid var(--c-pri)", color:"var(--c-pri)", padding:"9px 18px", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer" }}>
             📥 Importar Excel
@@ -7151,7 +7205,7 @@ function MateriasPrimasView({ showToast }) {
     const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs");
     const buf  = await file.arrayBuffer();
     const wb   = XLSX.read(buf);
-    const ws   = wb.Sheets[wb.SheetNames[0]];
+    const ws   = wb.Sheets["Materias primas"] || wb.Sheets[wb.SheetNames[0]];
     if (!ws) { showToast("No se pudo leer el Excel","error"); return; }
     const rows = XLSX.utils.sheet_to_json(ws, { defval:"" });
     const parsed = rows.filter(r=>r.nombre||r.Nombre).map(r=>({
